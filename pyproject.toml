@@ -1,0 +1,73 @@
+[build-system]
+requires = [
+    "setuptools>=80",
+    "setuptools-scm[simple]>=9.2",
+]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tutorial-sdk"
+dynamic = ["version"]
+description = "A declarative, configuration-driven SDK for building, validating, and deploying reproducible tutorial packages."
+readme = "README.md"
+license = "Apache-2.0"
+license-files = ["LICENSE", "NOTICE"]
+authors = [
+    { name = "Mikhail Titov" },
+]
+requires-python = ">=3.10"
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+]
+dependencies = [
+    "pydantic>=2.0",
+    "PyYAML>=6.0",
+]
+
+[project.urls]
+Homepage = "https://bnl-peso-hub.github.io/tutorial-sdk/"
+Documentation = "https://bnl-peso-hub.github.io/tutorial-sdk/"
+Repository = "https://github.com/BNL-PESO-Hub/tutorial-sdk.git"
+Issues = "https://github.com/BNL-PESO-Hub/tutorial-sdk/issues"
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "ruff>=0.15.0",
+]
+docs = [
+    "mkdocs~=1.6",
+    "mkdocs-material~=9.7",
+    "mkdocstrings[python]~=1.0",
+]
+
+[project.scripts]
+tutorial-sdk = "tutorial_sdk.cli:main"
+
+[tool.setuptools]
+packages = { find = { where = ["src"] } }
+
+[tool.setuptools_scm]
+local_scheme = "no-local-version"
+
+[tool.ruff]
+line-length = 80
+
+[tool.ruff.lint]
+select = ["E", "F", "D"]
+ignore = ["D202"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["D"]
+
+[tool.coverage.run]
+source = ["src"]
+omit = ["tests/*"]

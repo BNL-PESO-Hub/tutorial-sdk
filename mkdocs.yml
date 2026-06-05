@@ -1,0 +1,98 @@
+site_name: Tutorial SDK Documentation
+site_url: https://bnl-peso-hub.github.io/tutorial-sdk/
+site_description: A declarative, configuration-driven SDK for building, validating, and deploying reproducible tutorial packages.
+
+theme:
+  name: material
+  language: en
+  favicon: assets/images/favicon.svg
+
+  font:
+    text: Inter
+    code: JetBrains Mono
+
+  icon:
+    logo: material/atom-variant
+    repo: fontawesome/brands/github
+
+  palette:
+    - scheme: default
+      primary: white
+      accent: deep orange
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+
+    - scheme: slate
+      primary: black
+      accent: amber
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+
+  features:
+    # Navigation
+    - navigation.instant
+    - navigation.instant.prefetch
+    - navigation.tabs
+    - navigation.tabs.sticky
+    - navigation.sections
+    - navigation.top
+    - navigation.tracking
+    - navigation.indexes
+
+    # Search
+    - search.suggest
+    - search.highlight
+    - search.share
+
+    # Content
+    - content.code.copy
+    - content.code.annotate
+    - content.tabs.link
+
+    # TOC
+    - toc.follow
+
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          paths:
+            - src
+          options:
+            docstring_style: google
+            docstring_options:
+              returns_multiple_items: false
+            members_order: source
+            separate_signature: true
+            show_signature_annotations: true
+            show_source: true
+            show_root_heading: true
+            heading_level: 3
+
+markdown_extensions:
+  - admonition
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.tabbed:
+      alternate_style: true
+
+extra_css:
+  - assets/stylesheets/extra.css
+extra_javascript:
+  - assets/javascripts/tables.js
+
+nav:
+  - Home: index.md
+  - Architecture: architecture.md
+  - Configuration Schema: config-schema.md
+  - CLI Reference: cli.md
+  - Python API Reference:
+      - Usage Example: api-example.md
+      - Public API: api-public.md
+      - Full SDK API: api-package.md
