@@ -1,0 +1,147 @@
+:root {
+  --calm-border: rgba(0, 0, 0, 0.06);
+}
+
+[data-md-color-scheme="slate"] {
+  --calm-border: rgba(255, 255, 255, 0.08);
+}
+
+.md-header {
+  border-bottom: 1px solid var(--calm-border) !important;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02) !important;
+}
+
+.md-header__title {
+  font-family: var(--md-text-font);
+  font-weight: 700 !important;
+  letter-spacing: 0.02em;
+  text-transform: none;
+}
+
+.md-tabs {
+  border-bottom: 1px solid var(--calm-border);
+}
+
+.md-tabs__link--active {
+  font-weight: 600 !important;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  font-family: var(--md-text-font);
+  color: var(--md-default-fg-color);
+  letter-spacing: -0.02em;
+}
+
+h1 {
+  font-size: 2.1em;
+  font-weight: 700;
+  padding-bottom: 8px;
+  margin-top: 1.6em;
+  margin-bottom: 0.8em;
+  border-bottom: 1px solid var(--calm-border);
+}
+
+h2 {
+  font-weight: 600;
+  font-size: 1.5em;
+  border-bottom: 1px dashed var(--calm-border);
+  padding-bottom: 6px;
+  margin-top: 1.8em;
+  margin-bottom: 0.8em;
+}
+
+h3 {
+  font-weight: 600;
+  font-size: 1.25em;
+}
+
+.md-nav__link--active {
+  font-weight: 600 !important;
+}
+
+.md-typeset pre {
+  border-radius: 6px;
+  background-color: #0f1219 !important;
+  border: 1px solid var(--calm-border) !important;
+  box-shadow: none;
+  transition: border-color 0.25s ease;
+}
+
+[data-md-color-scheme="default"] .md-typeset pre {
+  background-color: #f8fafc !important;
+}
+
+.md-typeset pre:hover {
+  border-color: var(--md-accent-fg-color) !important;
+}
+
+.md-typeset .admonition {
+  border-radius: 6px;
+  box-shadow: none;
+  margin-bottom: 1.4em;
+  border: 1px solid var(--calm-border);
+  border-left: 3px solid var(--md-accent-fg-color) !important;
+  background-color: var(--md-accent-fg-color--transparent) !important;
+}
+
+.md-typeset .admonition-title {
+  font-family: var(--md-text-font);
+  font-weight: 600;
+  font-size: 0.85em;
+  letter-spacing: 0.02em;
+  border-bottom: 1px solid var(--calm-border);
+  padding: 8px 16px !important;
+}
+
+.md-typeset .admonition.important {
+  border-left-color: #7b8296 !important;
+  background-color: rgba(123, 130, 150, 0.03) !important;
+}
+
+.md-typeset .admonition.warning {
+  border-left-color: #d97706 !important;
+  background-color: rgba(217, 119, 6, 0.02) !important;
+}
+
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(120, 120, 120, 0.2);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--md-accent-fg-color);
+}
+
+.md-typeset table {
+  width: 100% !important;
+  display: table !important;
+  border-collapse: collapse;
+  margin-bottom: 1.5em;
+}
+
+.md-typeset th,
+.md-typeset td {
+  padding: 8px 12px !important;
+  vertical-align: top;
+  white-space: nowrap !important;
+  width: 1% !important;
+}
+
+/* Allow text wrapping and expansion for the last column (Description) */
+.md-typeset th:last-child,
+.md-typeset td:last-child {
+  white-space: normal !important;
+  width: auto !important;
+}
