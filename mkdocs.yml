@@ -1,6 +1,8 @@
 site_name: Tutorial SDK Documentation
 site_url: https://bnl-peso-hub.github.io/tutorial-sdk/
 site_description: A declarative, configuration-driven SDK for building, validating, and deploying reproducible tutorial packages.
+repo_url: https://github.com/BNL-PESO-Hub/tutorial-sdk
+repo_name: BNL-PESO-Hub/tutorial-sdk
 
 theme:
   name: material
