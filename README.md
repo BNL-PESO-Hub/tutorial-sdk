@@ -1,4 +1,4 @@
-# [![Tutorial SDK Banner](docs/assets/images/tutorial-sdk-banner-modern.png)]()
+# [![Tutorial SDK Banner](https://raw.githubusercontent.com/BNL-PESO-Hub/tutorial-sdk/main/docs/assets/images/tutorial-sdk-banner-modern.png)]()
 
 [![PyPI version](https://img.shields.io/pypi/v/tutorial-sdk.svg?color=blue)](https://pypi.org/project/tutorial-sdk/)
 [![Python versions](https://img.shields.io/pypi/pyversions/tutorial-sdk.svg)](https://pypi.org/project/tutorial-sdk/)
