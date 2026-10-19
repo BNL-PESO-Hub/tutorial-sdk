@@ -28,6 +28,7 @@ site/
 .vscode/
 
 # System
+.agents/
 .context/
 .tools/
 .DS_Store
