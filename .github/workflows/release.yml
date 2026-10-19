@@ -7,6 +7,12 @@ on:
         description: "Version tag to create (e.g., 0.1.0, 1.2.3)"
         required: true
         type: string
+      publish:
+        description: "Publish to PyPI after creating tag"
+        required: false
+        type: boolean
+        default: true
+
 
 jobs:
   tag:
@@ -15,7 +21,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Validate version format
         run: |
@@ -37,3 +43,13 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git tag -a "v${{ inputs.version }}" -m "Release v${{ inputs.version }}"
           git push origin "v${{ inputs.version }}"
+
+  publish:
+    needs: tag
+    if: ${{ inputs.publish }}
+    permissions:
+      id-token: write
+      attestations: write
+    uses: ./.github/workflows/publish.yml
+    with:
+      ref: "v${{ inputs.version }}"
