@@ -23,7 +23,7 @@
       
       
       <link rel="icon" href="../assets/images/favicon.svg">
-      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
     
     
       
@@ -31,7 +31,7 @@
       
     
     
-      <link rel="stylesheet" href="../assets/stylesheets/main.484c7ddc.min.css">
+      <link rel="stylesheet" href="../assets/stylesheets/main.ec1eaa64.min.css">
       
         
         <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
@@ -1572,9 +1572,9 @@
 <span class="normal">18</span>
 <span class="normal">19</span>
 <span class="normal">20</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">AuthorSpec</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Tutorial author metadata.&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">"""Tutorial author metadata."""</span>
 
-    <span class="n">model_config</span> <span class="o">=</span> <span class="n">ConfigDict</span><span class="p">(</span><span class="n">extra</span><span class="o">=</span><span class="s2">&quot;forbid&quot;</span><span class="p">)</span>
+    <span class="n">model_config</span> <span class="o">=</span> <span class="n">ConfigDict</span><span class="p">(</span><span class="n">extra</span><span class="o">=</span><span class="s2">"forbid"</span><span class="p">)</span>
 
     <span class="n">name</span><span class="p">:</span> <span class="nb">str</span>
     <span class="n">email</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
@@ -1646,13 +1646,13 @@
 <span class="normal">94</span>
 <span class="normal">95</span>
 <span class="normal">96</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">BuildSpec</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Build artifact and container image configuration.&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">"""Build artifact and container image configuration."""</span>
 
-    <span class="n">model_config</span> <span class="o">=</span> <span class="n">ConfigDict</span><span class="p">(</span><span class="n">extra</span><span class="o">=</span><span class="s2">&quot;forbid&quot;</span><span class="p">)</span>
+    <span class="n">model_config</span> <span class="o">=</span> <span class="n">ConfigDict</span><span class="p">(</span><span class="n">extra</span><span class="o">=</span><span class="s2">"forbid"</span><span class="p">)</span>
 
-    <span class="n">dockerfile</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;Dockerfile&quot;</span>
+    <span class="n">dockerfile</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">"Dockerfile"</span>
     <span class="n">image</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
-    <span class="n">base_image</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">&quot;python:</span><span class="si">{</span><span class="n">_PYTHON_VERSION_STR</span><span class="si">}</span><span class="s2">-slim&quot;</span>
+    <span class="n">base_image</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="sa">f</span><span class="s2">"python:</span><span class="si">{</span><span class="n">_PYTHON_VERSION_STR</span><span class="si">}</span><span class="s2">-slim"</span>
     <span class="n">copy_repo</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span>
     <span class="n">preexecute_notebooks</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>
     <span class="n">export_devcontainer</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>
@@ -1736,9 +1736,9 @@
 <span class="normal">66</span>
 <span class="normal">67</span>
 <span class="normal">68</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">ContentSpec</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Tutorial content assets copied into the image.&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">"""Tutorial content assets copied into the image."""</span>
 
-    <span class="n">model_config</span> <span class="o">=</span> <span class="n">ConfigDict</span><span class="p">(</span><span class="n">extra</span><span class="o">=</span><span class="s2">&quot;forbid&quot;</span><span class="p">)</span>
+    <span class="n">model_config</span> <span class="o">=</span> <span class="n">ConfigDict</span><span class="p">(</span><span class="n">extra</span><span class="o">=</span><span class="s2">"forbid"</span><span class="p">)</span>
 
     <span class="n">notebooks</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="nb">list</span><span class="p">)</span>
     <span class="n">scripts</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="nb">list</span><span class="p">)</span>
@@ -1748,7 +1748,7 @@
     <span class="n">solutions</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="nb">list</span><span class="p">)</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">all_paths</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Return every declared content path in stable order.&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">"""Return every declared content path in stable order."""</span>
 
         <span class="k">return</span> <span class="p">[</span>
             <span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">notebooks</span><span class="p">,</span>
@@ -1803,7 +1803,7 @@
 <span class="normal">66</span>
 <span class="normal">67</span>
 <span class="normal">68</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">all_paths</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Return every declared content path in stable order.&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">"""Return every declared content path in stable order."""</span>
 
     <span class="k">return</span> <span class="p">[</span>
         <span class="o">*</span><span class="bp">self</span><span class="o">.</span><span class="n">notebooks</span><span class="p">,</span>
@@ -1864,9 +1864,9 @@
 <span class="normal">41</span>
 <span class="normal">42</span>
 <span class="normal">43</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">DependencySpec</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Package dependencies declared by package manager.&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">"""Package dependencies declared by package manager."""</span>
 
-    <span class="n">model_config</span> <span class="o">=</span> <span class="n">ConfigDict</span><span class="p">(</span><span class="n">extra</span><span class="o">=</span><span class="s2">&quot;forbid&quot;</span><span class="p">)</span>
+    <span class="n">model_config</span> <span class="o">=</span> <span class="n">ConfigDict</span><span class="p">(</span><span class="n">extra</span><span class="o">=</span><span class="s2">"forbid"</span><span class="p">)</span>
 
     <span class="n">apt</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="nb">list</span><span class="p">)</span>
     <span class="n">pip</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="nb">list</span><span class="p">)</span>
@@ -1932,9 +1932,9 @@
 <span class="normal">76</span>
 <span class="normal">77</span>
 <span class="normal">78</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">DockerfileSections</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Optional user-managed Dockerfile snippets.&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">"""Optional user-managed Dockerfile snippets."""</span>
 
-    <span class="n">model_config</span> <span class="o">=</span> <span class="n">ConfigDict</span><span class="p">(</span><span class="n">extra</span><span class="o">=</span><span class="s2">&quot;forbid&quot;</span><span class="p">)</span>
+    <span class="n">model_config</span> <span class="o">=</span> <span class="n">ConfigDict</span><span class="p">(</span><span class="n">extra</span><span class="o">=</span><span class="s2">"forbid"</span><span class="p">)</span>
 
     <span class="n">before_dependencies</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
     <span class="n">after_dependencies</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
@@ -1999,11 +1999,11 @@
 <span class="normal">115</span>
 <span class="normal">116</span>
 <span class="normal">117</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">EntrypointSpec</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Default runtime entrypoint.&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">"""Default runtime entrypoint."""</span>
 
-    <span class="n">model_config</span> <span class="o">=</span> <span class="n">ConfigDict</span><span class="p">(</span><span class="n">extra</span><span class="o">=</span><span class="s2">&quot;forbid&quot;</span><span class="p">)</span>
+    <span class="n">model_config</span> <span class="o">=</span> <span class="n">ConfigDict</span><span class="p">(</span><span class="n">extra</span><span class="o">=</span><span class="s2">"forbid"</span><span class="p">)</span>
 
-    <span class="n">kind</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;jupyterlab&quot;</span><span class="p">,</span> <span class="s2">&quot;shell&quot;</span><span class="p">,</span> <span class="s2">&quot;command&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="s2">&quot;jupyterlab&quot;</span>
+    <span class="n">kind</span><span class="p">:</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">"jupyterlab"</span><span class="p">,</span> <span class="s2">"shell"</span><span class="p">,</span> <span class="s2">"command"</span><span class="p">]</span> <span class="o">=</span> <span class="s2">"jupyterlab"</span>
     <span class="n">default_notebook</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
     <span class="n">command</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
 </code></pre></div></td></tr></table></div>
@@ -2068,13 +2068,13 @@
 <span class="normal">30</span>
 <span class="normal">31</span>
 <span class="normal">32</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">RuntimeSpec</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Runtime configuration for a tutorial environment.&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">"""Runtime configuration for a tutorial environment."""</span>
 
-    <span class="n">model_config</span> <span class="o">=</span> <span class="n">ConfigDict</span><span class="p">(</span><span class="n">extra</span><span class="o">=</span><span class="s2">&quot;forbid&quot;</span><span class="p">)</span>
+    <span class="n">model_config</span> <span class="o">=</span> <span class="n">ConfigDict</span><span class="p">(</span><span class="n">extra</span><span class="o">=</span><span class="s2">"forbid"</span><span class="p">)</span>
 
-    <span class="n">language</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;python&quot;</span>
+    <span class="n">language</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">"python"</span>
     <span class="n">python</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="n">_PYTHON_VERSION_STR</span>
-    <span class="n">kernel</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;python3&quot;</span>
+    <span class="n">kernel</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">"python3"</span>
     <span class="n">jupyterlab</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span>
     <span class="n">expose_port</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">8888</span>
 </code></pre></div></td></tr></table></div>
@@ -2384,38 +2384,38 @@
 <span class="normal">274</span>
 <span class="normal">275</span>
 <span class="normal">276</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">TutorialProject</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;High-level API for tutorial projects.&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">"""High-level API for tutorial projects."""</span>
 
     <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
         <span class="bp">self</span><span class="p">,</span>
         <span class="n">spec</span><span class="p">:</span> <span class="n">TutorialSpec</span><span class="p">,</span>
-        <span class="n">root</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">Path</span> <span class="o">=</span> <span class="s2">&quot;.&quot;</span><span class="p">,</span>
+        <span class="n">root</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">Path</span> <span class="o">=</span> <span class="s2">"."</span><span class="p">,</span>
         <span class="n">config_path</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">Path</span> <span class="o">=</span> <span class="n">DEFAULT_CONFIG</span><span class="p">,</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Create a tutorial project object.</span>
+<span class="w">        </span><span class="sd">"""Create a tutorial project object.</span>
 
 <span class="sd">        Args:</span>
 <span class="sd">            spec: Parsed tutorial specification.</span>
 <span class="sd">            root: Project root directory.</span>
 <span class="sd">            config_path: Path to the tutorial</span>
 <span class="sd">                YAML configuration file.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
 
         <span class="bp">self</span><span class="o">.</span><span class="n">spec</span> <span class="o">=</span> <span class="n">spec</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">root</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">root</span><span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">config_path</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">config_path</span><span class="p">)</span>
 
     <span class="nd">@classmethod</span>
-    <span class="k">def</span><span class="w"> </span><span class="nf">load</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">path</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">Path</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;TutorialProject&quot;</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Load a tutorial project from a YAML specification.</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">load</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">path</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">Path</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">"TutorialProject"</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""Load a tutorial project from a YAML specification.</span>
 
 <span class="sd">        Args:</span>
 <span class="sd">            path: Path to a tutorial YAML file.</span>
 
 <span class="sd">        Returns:</span>
 <span class="sd">            A ``TutorialProject`` rooted in the config</span>
-<span class="sd">            file&#39;s parent directory.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">            file's parent directory.</span>
+<span class="sd">        """</span>
 
         <span class="n">config_path</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">path</span><span class="p">)</span>
         <span class="n">spec</span> <span class="o">=</span> <span class="n">TutorialSpec</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">config_path</span><span class="p">)</span>
@@ -2426,8 +2426,8 @@
         <span class="p">)</span>
 
     <span class="nd">@classmethod</span>
-    <span class="k">def</span><span class="w"> </span><span class="nf">init</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">path</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">Path</span> <span class="o">=</span> <span class="s2">&quot;.&quot;</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;TutorialProject&quot;</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Create a minimal tutorial project skeleton.</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">init</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">path</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">Path</span> <span class="o">=</span> <span class="s2">"."</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">"TutorialProject"</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""Create a minimal tutorial project skeleton.</span>
 
 <span class="sd">        Args:</span>
 <span class="sd">            path: Target directory for the new project.</span>
@@ -2435,12 +2435,12 @@
 <span class="sd">        Returns:</span>
 <span class="sd">            A ``TutorialProject`` with a ``minimal``</span>
 <span class="sd">            template applied.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
 
         <span class="kn">from</span><span class="w"> </span><span class="nn">.scaffold</span><span class="w"> </span><span class="kn">import</span> <span class="n">ProjectScaffolder</span>
 
         <span class="k">return</span> <span class="n">ProjectScaffolder</span><span class="p">()</span><span class="o">.</span><span class="n">scaffold</span><span class="p">(</span>
-            <span class="s2">&quot;minimal&quot;</span><span class="p">,</span>
+            <span class="s2">"minimal"</span><span class="p">,</span>
             <span class="n">Path</span><span class="p">(</span><span class="n">path</span><span class="p">),</span>
         <span class="p">)</span>
 
@@ -2449,8 +2449,8 @@
         <span class="bp">cls</span><span class="p">,</span>
         <span class="n">source</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">Path</span><span class="p">,</span>
         <span class="n">target</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">Path</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-    <span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;TutorialProject&quot;</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Import an existing directory as a tutorial project.</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">"TutorialProject"</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""Import an existing directory as a tutorial project.</span>
 
 <span class="sd">        Args:</span>
 <span class="sd">            source: Path to an existing directory containing</span>
@@ -2460,7 +2460,7 @@
 
 <span class="sd">        Returns:</span>
 <span class="sd">            A fully initialised ``TutorialProject``.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
 
         <span class="kn">from</span><span class="w"> </span><span class="nn">.scaffold</span><span class="w"> </span><span class="kn">import</span> <span class="n">ProjectImporter</span>
 
@@ -2475,8 +2475,8 @@
         <span class="n">url</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
         <span class="n">target</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">Path</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
         <span class="n">remove_clone</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
-    <span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;TutorialProject&quot;</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Import a remote repository as a tutorial project.</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">"TutorialProject"</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""Import a remote repository as a tutorial project.</span>
 
 <span class="sd">        Args:</span>
 <span class="sd">            url: Git-compatible clone URL.</span>
@@ -2486,7 +2486,7 @@
 
 <span class="sd">        Returns:</span>
 <span class="sd">            A ``TutorialProject``.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
 
         <span class="kn">from</span><span class="w"> </span><span class="nn">.scaffold</span><span class="w"> </span><span class="kn">import</span> <span class="n">ProjectImporter</span>
 
@@ -2502,8 +2502,8 @@
         <span class="n">org_repo</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
         <span class="n">target</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">Path</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
         <span class="n">remove_clone</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
-    <span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;TutorialProject&quot;</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Import a GitHub repository as a tutorial project.</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">"TutorialProject"</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""Import a GitHub repository as a tutorial project.</span>
 
 <span class="sd">        Args:</span>
 <span class="sd">            org_repo: ``ORG/REPO`` shorthand.</span>
@@ -2513,7 +2513,7 @@
 
 <span class="sd">        Returns:</span>
 <span class="sd">            A ``TutorialProject``.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
 
         <span class="kn">from</span><span class="w"> </span><span class="nn">.scaffold</span><span class="w"> </span><span class="kn">import</span> <span class="n">ProjectImporter</span>
 
@@ -2524,12 +2524,12 @@
         <span class="p">)</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">resolve</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">ResolvedTutorialProject</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Resolve the project content graph.</span>
+<span class="w">        </span><span class="sd">"""Resolve the project content graph.</span>
 
 <span class="sd">        Returns:</span>
 <span class="sd">            A ``ResolvedTutorialProject`` with content</span>
 <span class="sd">            and missing paths populated.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
 
         <span class="k">return</span> <span class="n">TutorialResolver</span><span class="p">(</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">spec</span><span class="p">,</span>
@@ -2542,7 +2542,7 @@
         <span class="n">container</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
         <span class="n">image</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">ValidationReport</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Run configured validation checks.</span>
+<span class="w">        </span><span class="sd">"""Run configured validation checks.</span>
 
 <span class="sd">        Args:</span>
 <span class="sd">            strict: If ``True``, promote warnings to</span>
@@ -2554,7 +2554,7 @@
 
 <span class="sd">        Returns:</span>
 <span class="sd">            Combined ``ValidationReport``.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
 
         <span class="n">reports</span> <span class="o">=</span> <span class="p">[</span>
             <span class="n">AssetValidator</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">spec</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">root</span><span class="p">)</span><span class="o">.</span><span class="n">validate</span><span class="p">(),</span>
@@ -2570,22 +2570,22 @@
             <span class="p">)</span>
         <span class="n">report</span> <span class="o">=</span> <span class="n">ValidationReport</span><span class="o">.</span><span class="n">combine</span><span class="p">(</span><span class="n">reports</span><span class="p">)</span>
         <span class="k">if</span> <span class="n">strict</span> <span class="ow">and</span> <span class="n">report</span><span class="o">.</span><span class="n">warnings</span><span class="p">:</span>
-            <span class="n">report</span> <span class="o">=</span> <span class="n">report</span><span class="o">.</span><span class="n">model_copy</span><span class="p">(</span><span class="n">update</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;passed&quot;</span><span class="p">:</span> <span class="kc">False</span><span class="p">})</span>
+            <span class="n">report</span> <span class="o">=</span> <span class="n">report</span><span class="o">.</span><span class="n">model_copy</span><span class="p">(</span><span class="n">update</span><span class="o">=</span><span class="p">{</span><span class="s2">"passed"</span><span class="p">:</span> <span class="kc">False</span><span class="p">})</span>
         <span class="k">return</span> <span class="n">report</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">inspect</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Return resolved tutorial metadata as JSON.</span>
+<span class="w">        </span><span class="sd">"""Return resolved tutorial metadata as JSON.</span>
 
 <span class="sd">        Returns:</span>
 <span class="sd">            Pretty-printed JSON string.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
 
         <span class="n">resolved</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">resolve</span><span class="p">()</span>
         <span class="n">payload</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">spec</span><span class="o">.</span><span class="n">to_manifest_dict</span><span class="p">(</span><span class="n">image</span><span class="o">=</span><span class="n">resolved</span><span class="o">.</span><span class="n">image</span><span class="p">)</span>
-        <span class="n">payload</span><span class="p">[</span><span class="s2">&quot;missing_paths&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="p">[</span>
+        <span class="n">payload</span><span class="p">[</span><span class="s2">"missing_paths"</span><span class="p">]</span> <span class="o">=</span> <span class="p">[</span>
             <span class="nb">str</span><span class="p">(</span><span class="n">path</span><span class="o">.</span><span class="n">relative_to</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">root</span><span class="p">))</span> <span class="k">for</span> <span class="n">path</span> <span class="ow">in</span> <span class="n">resolved</span><span class="o">.</span><span class="n">missing_paths</span>
         <span class="p">]</span>
-        <span class="k">return</span> <span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">(</span><span class="n">payload</span><span class="p">,</span> <span class="n">indent</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span> <span class="o">+</span> <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span>
+        <span class="k">return</span> <span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">(</span><span class="n">payload</span><span class="p">,</span> <span class="n">indent</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span> <span class="o">+</span> <span class="s2">"</span><span class="se">\n</span><span class="s2">"</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">build</span><span class="p">(</span>
         <span class="bp">self</span><span class="p">,</span>
@@ -2593,7 +2593,7 @@
         <span class="n">no_cache</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
         <span class="n">platform</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">BuildResult</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Generate a Dockerfile and build the container image.</span>
+<span class="w">        </span><span class="sd">"""Generate a Dockerfile and build the container image.</span>
 
 <span class="sd">        Args:</span>
 <span class="sd">            image: Optional image tag override.</span>
@@ -2605,7 +2605,7 @@
 <span class="sd">        Returns:</span>
 <span class="sd">            A ``BuildResult`` with the image tag and</span>
 <span class="sd">            Dockerfile path.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
 
         <span class="k">return</span> <span class="n">LocalBuilder</span><span class="p">(</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">spec</span><span class="p">,</span>
@@ -2619,7 +2619,7 @@
     <span class="k">def</span><span class="w"> </span><span class="nf">run</span><span class="p">(</span>
         <span class="bp">self</span><span class="p">,</span> <span class="n">image</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">port</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">8888</span><span class="p">,</span> <span class="n">shell</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">RunResult</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Run the tutorial container locally.</span>
+<span class="w">        </span><span class="sd">"""Run the tutorial container locally.</span>
 
 <span class="sd">        Args:</span>
 <span class="sd">            image: Optional image tag override.</span>
@@ -2630,7 +2630,7 @@
 <span class="sd">        Returns:</span>
 <span class="sd">            A ``RunResult`` with the container exit</span>
 <span class="sd">            code.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
 
         <span class="k">return</span> <span class="n">RuntimeLauncher</span><span class="p">(</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">spec</span><span class="p">,</span>
@@ -2664,7 +2664,7 @@
 
 
 </h3>
-<div class="doc-signature highlight"><pre><span></span><code><span class="nf">__init__</span><span class="p">(</span><span class="n">spec</span><span class="p">:</span> <span class="n">TutorialSpec</span><span class="p">,</span> <span class="n">root</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">Path</span> <span class="o">=</span> <span class="s1">&#39;.&#39;</span><span class="p">,</span> <span class="n">config_path</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">Path</span> <span class="o">=</span> <span class="n">DEFAULT_CONFIG</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span>
+<div class="doc-signature highlight"><pre><span></span><code><span class="nf">__init__</span><span class="p">(</span><span class="n">spec</span><span class="p">:</span> <span class="n">TutorialSpec</span><span class="p">,</span> <span class="n">root</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">Path</span> <span class="o">=</span> <span class="s1">'.'</span><span class="p">,</span> <span class="n">config_path</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">Path</span> <span class="o">=</span> <span class="n">DEFAULT_CONFIG</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span>
 </code></pre></div>
 
     <div class="doc doc-contents ">
@@ -2758,17 +2758,17 @@ YAML configuration file.</p>
 <span class="normal">40</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
     <span class="bp">self</span><span class="p">,</span>
     <span class="n">spec</span><span class="p">:</span> <span class="n">TutorialSpec</span><span class="p">,</span>
-    <span class="n">root</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">Path</span> <span class="o">=</span> <span class="s2">&quot;.&quot;</span><span class="p">,</span>
+    <span class="n">root</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">Path</span> <span class="o">=</span> <span class="s2">"."</span><span class="p">,</span>
     <span class="n">config_path</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">Path</span> <span class="o">=</span> <span class="n">DEFAULT_CONFIG</span><span class="p">,</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Create a tutorial project object.</span>
+<span class="w">    </span><span class="sd">"""Create a tutorial project object.</span>
 
 <span class="sd">    Args:</span>
 <span class="sd">        spec: Parsed tutorial specification.</span>
 <span class="sd">        root: Project root directory.</span>
 <span class="sd">        config_path: Path to the tutorial</span>
 <span class="sd">            YAML configuration file.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    """</span>
 
     <span class="bp">self</span><span class="o">.</span><span class="n">spec</span> <span class="o">=</span> <span class="n">spec</span>
     <span class="bp">self</span><span class="o">.</span><span class="n">root</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">root</span><span class="p">)</span>
@@ -2924,7 +2924,7 @@ Dockerfile path.</p>
     <span class="n">no_cache</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="n">platform</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">BuildResult</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Generate a Dockerfile and build the container image.</span>
+<span class="w">    </span><span class="sd">"""Generate a Dockerfile and build the container image.</span>
 
 <span class="sd">    Args:</span>
 <span class="sd">        image: Optional image tag override.</span>
@@ -2936,7 +2936,7 @@ Dockerfile path.</p>
 <span class="sd">    Returns:</span>
 <span class="sd">        A ``BuildResult`` with the image tag and</span>
 <span class="sd">        Dockerfile path.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    """</span>
 
     <span class="k">return</span> <span class="n">LocalBuilder</span><span class="p">(</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">spec</span><span class="p">,</span>
@@ -2964,7 +2964,7 @@ Dockerfile path.</p>
   </span>
 
 </h3>
-<div class="doc-signature highlight"><pre><span></span><code><span class="nf">init</span><span class="p">(</span><span class="n">path</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">Path</span> <span class="o">=</span> <span class="s1">&#39;.&#39;</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">TutorialProject</span>
+<div class="doc-signature highlight"><pre><span></span><code><span class="nf">init</span><span class="p">(</span><span class="n">path</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">Path</span> <span class="o">=</span> <span class="s1">'.'</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">TutorialProject</span>
 </code></pre></div>
 
     <div class="doc doc-contents ">
@@ -3047,8 +3047,8 @@ template applied.</p>
 <span class="normal">77</span>
 <span class="normal">78</span>
 <span class="normal">79</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@classmethod</span>
-<span class="k">def</span><span class="w"> </span><span class="nf">init</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">path</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">Path</span> <span class="o">=</span> <span class="s2">&quot;.&quot;</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;TutorialProject&quot;</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Create a minimal tutorial project skeleton.</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">init</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">path</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">Path</span> <span class="o">=</span> <span class="s2">"."</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">"TutorialProject"</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Create a minimal tutorial project skeleton.</span>
 
 <span class="sd">    Args:</span>
 <span class="sd">        path: Target directory for the new project.</span>
@@ -3056,12 +3056,12 @@ template applied.</p>
 <span class="sd">    Returns:</span>
 <span class="sd">        A ``TutorialProject`` with a ``minimal``</span>
 <span class="sd">        template applied.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    """</span>
 
     <span class="kn">from</span><span class="w"> </span><span class="nn">.scaffold</span><span class="w"> </span><span class="kn">import</span> <span class="n">ProjectScaffolder</span>
 
     <span class="k">return</span> <span class="n">ProjectScaffolder</span><span class="p">()</span><span class="o">.</span><span class="n">scaffold</span><span class="p">(</span>
-        <span class="s2">&quot;minimal&quot;</span><span class="p">,</span>
+        <span class="s2">"minimal"</span><span class="p">,</span>
         <span class="n">Path</span><span class="p">(</span><span class="n">path</span><span class="p">),</span>
     <span class="p">)</span>
 </code></pre></div></td></tr></table></div>
@@ -3192,8 +3192,8 @@ tutorial project.</p>
     <span class="bp">cls</span><span class="p">,</span>
     <span class="n">source</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">Path</span><span class="p">,</span>
     <span class="n">target</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">Path</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-<span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;TutorialProject&quot;</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Import an existing directory as a tutorial project.</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">"TutorialProject"</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Import an existing directory as a tutorial project.</span>
 
 <span class="sd">    Args:</span>
 <span class="sd">        source: Path to an existing directory containing</span>
@@ -3203,7 +3203,7 @@ tutorial project.</p>
 
 <span class="sd">    Returns:</span>
 <span class="sd">        A fully initialised ``TutorialProject``.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    """</span>
 
     <span class="kn">from</span><span class="w"> </span><span class="nn">.scaffold</span><span class="w"> </span><span class="kn">import</span> <span class="n">ProjectImporter</span>
 
@@ -3357,8 +3357,8 @@ repository after importing.</p>
     <span class="n">org_repo</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
     <span class="n">target</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">Path</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="n">remove_clone</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
-<span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;TutorialProject&quot;</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Import a GitHub repository as a tutorial project.</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">"TutorialProject"</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Import a GitHub repository as a tutorial project.</span>
 
 <span class="sd">    Args:</span>
 <span class="sd">        org_repo: ``ORG/REPO`` shorthand.</span>
@@ -3368,7 +3368,7 @@ repository after importing.</p>
 
 <span class="sd">    Returns:</span>
 <span class="sd">        A ``TutorialProject``.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    """</span>
 
     <span class="kn">from</span><span class="w"> </span><span class="nn">.scaffold</span><span class="w"> </span><span class="kn">import</span> <span class="n">ProjectImporter</span>
 
@@ -3523,8 +3523,8 @@ repository after importing.</p>
     <span class="n">url</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
     <span class="n">target</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">Path</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="n">remove_clone</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
-<span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;TutorialProject&quot;</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Import a remote repository as a tutorial project.</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">"TutorialProject"</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Import a remote repository as a tutorial project.</span>
 
 <span class="sd">    Args:</span>
 <span class="sd">        url: Git-compatible clone URL.</span>
@@ -3534,7 +3534,7 @@ repository after importing.</p>
 
 <span class="sd">    Returns:</span>
 <span class="sd">        A ``TutorialProject``.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    """</span>
 
     <span class="kn">from</span><span class="w"> </span><span class="nn">.scaffold</span><span class="w"> </span><span class="kn">import</span> <span class="n">ProjectImporter</span>
 
@@ -3603,18 +3603,18 @@ repository after importing.</p>
 <span class="normal">220</span>
 <span class="normal">221</span>
 <span class="normal">222</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">inspect</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Return resolved tutorial metadata as JSON.</span>
+<span class="w">    </span><span class="sd">"""Return resolved tutorial metadata as JSON.</span>
 
 <span class="sd">    Returns:</span>
 <span class="sd">        Pretty-printed JSON string.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    """</span>
 
     <span class="n">resolved</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">resolve</span><span class="p">()</span>
     <span class="n">payload</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">spec</span><span class="o">.</span><span class="n">to_manifest_dict</span><span class="p">(</span><span class="n">image</span><span class="o">=</span><span class="n">resolved</span><span class="o">.</span><span class="n">image</span><span class="p">)</span>
-    <span class="n">payload</span><span class="p">[</span><span class="s2">&quot;missing_paths&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="p">[</span>
+    <span class="n">payload</span><span class="p">[</span><span class="s2">"missing_paths"</span><span class="p">]</span> <span class="o">=</span> <span class="p">[</span>
         <span class="nb">str</span><span class="p">(</span><span class="n">path</span><span class="o">.</span><span class="n">relative_to</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">root</span><span class="p">))</span> <span class="k">for</span> <span class="n">path</span> <span class="ow">in</span> <span class="n">resolved</span><span class="o">.</span><span class="n">missing_paths</span>
     <span class="p">]</span>
-    <span class="k">return</span> <span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">(</span><span class="n">payload</span><span class="p">,</span> <span class="n">indent</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span> <span class="o">+</span> <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span>
+    <span class="k">return</span> <span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">(</span><span class="n">payload</span><span class="p">,</span> <span class="n">indent</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span> <span class="o">+</span> <span class="s2">"</span><span class="se">\n</span><span class="s2">"</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>
@@ -3717,16 +3717,16 @@ file's parent directory.</p>
 <span class="normal">58</span>
 <span class="normal">59</span>
 <span class="normal">60</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@classmethod</span>
-<span class="k">def</span><span class="w"> </span><span class="nf">load</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">path</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">Path</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;TutorialProject&quot;</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Load a tutorial project from a YAML specification.</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">load</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">path</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">Path</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">"TutorialProject"</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Load a tutorial project from a YAML specification.</span>
 
 <span class="sd">    Args:</span>
 <span class="sd">        path: Path to a tutorial YAML file.</span>
 
 <span class="sd">    Returns:</span>
 <span class="sd">        A ``TutorialProject`` rooted in the config</span>
-<span class="sd">        file&#39;s parent directory.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">        file's parent directory.</span>
+<span class="sd">    """</span>
 
     <span class="n">config_path</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">path</span><span class="p">)</span>
     <span class="n">spec</span> <span class="o">=</span> <span class="n">TutorialSpec</span><span class="o">.</span><span class="n">load</span><span class="p">(</span><span class="n">config_path</span><span class="p">)</span>
@@ -3800,12 +3800,12 @@ and missing paths populated.</p>
 <span class="normal">169</span>
 <span class="normal">170</span>
 <span class="normal">171</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">resolve</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">ResolvedTutorialProject</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Resolve the project content graph.</span>
+<span class="w">    </span><span class="sd">"""Resolve the project content graph.</span>
 
 <span class="sd">    Returns:</span>
 <span class="sd">        A ``ResolvedTutorialProject`` with content</span>
 <span class="sd">        and missing paths populated.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    """</span>
 
     <span class="k">return</span> <span class="n">TutorialResolver</span><span class="p">(</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">spec</span><span class="p">,</span>
@@ -3954,7 +3954,7 @@ code.</p>
 <span class="normal">276</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">run</span><span class="p">(</span>
     <span class="bp">self</span><span class="p">,</span> <span class="n">image</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span> <span class="n">port</span><span class="p">:</span> <span class="nb">int</span> <span class="o">=</span> <span class="mi">8888</span><span class="p">,</span> <span class="n">shell</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">RunResult</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Run the tutorial container locally.</span>
+<span class="w">    </span><span class="sd">"""Run the tutorial container locally.</span>
 
 <span class="sd">    Args:</span>
 <span class="sd">        image: Optional image tag override.</span>
@@ -3965,7 +3965,7 @@ code.</p>
 <span class="sd">    Returns:</span>
 <span class="sd">        A ``RunResult`` with the container exit</span>
 <span class="sd">        code.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    """</span>
 
     <span class="k">return</span> <span class="n">RuntimeLauncher</span><span class="p">(</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">spec</span><span class="p">,</span>
@@ -4129,7 +4129,7 @@ validation.</p>
     <span class="n">container</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
     <span class="n">image</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="n">ValidationReport</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Run configured validation checks.</span>
+<span class="w">    </span><span class="sd">"""Run configured validation checks.</span>
 
 <span class="sd">    Args:</span>
 <span class="sd">        strict: If ``True``, promote warnings to</span>
@@ -4141,7 +4141,7 @@ validation.</p>
 
 <span class="sd">    Returns:</span>
 <span class="sd">        Combined ``ValidationReport``.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    """</span>
 
     <span class="n">reports</span> <span class="o">=</span> <span class="p">[</span>
         <span class="n">AssetValidator</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">spec</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">root</span><span class="p">)</span><span class="o">.</span><span class="n">validate</span><span class="p">(),</span>
@@ -4157,7 +4157,7 @@ validation.</p>
         <span class="p">)</span>
     <span class="n">report</span> <span class="o">=</span> <span class="n">ValidationReport</span><span class="o">.</span><span class="n">combine</span><span class="p">(</span><span class="n">reports</span><span class="p">)</span>
     <span class="k">if</span> <span class="n">strict</span> <span class="ow">and</span> <span class="n">report</span><span class="o">.</span><span class="n">warnings</span><span class="p">:</span>
-        <span class="n">report</span> <span class="o">=</span> <span class="n">report</span><span class="o">.</span><span class="n">model_copy</span><span class="p">(</span><span class="n">update</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;passed&quot;</span><span class="p">:</span> <span class="kc">False</span><span class="p">})</span>
+        <span class="n">report</span> <span class="o">=</span> <span class="n">report</span><span class="o">.</span><span class="n">model_copy</span><span class="p">(</span><span class="n">update</span><span class="o">=</span><span class="p">{</span><span class="s2">"passed"</span><span class="p">:</span> <span class="kc">False</span><span class="p">})</span>
     <span class="k">return</span> <span class="n">report</span>
 </code></pre></div></td></tr></table></div>
             </details>
@@ -4302,14 +4302,14 @@ validation.</p>
 <span class="normal">218</span>
 <span class="normal">219</span>
 <span class="normal">220</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">TutorialSpec</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Source-of-truth tutorial specification.&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">"""Source-of-truth tutorial specification."""</span>
 
-    <span class="n">model_config</span> <span class="o">=</span> <span class="n">ConfigDict</span><span class="p">(</span><span class="n">extra</span><span class="o">=</span><span class="s2">&quot;forbid&quot;</span><span class="p">)</span>
+    <span class="n">model_config</span> <span class="o">=</span> <span class="n">ConfigDict</span><span class="p">(</span><span class="n">extra</span><span class="o">=</span><span class="s2">"forbid"</span><span class="p">)</span>
 
     <span class="n">name</span><span class="p">:</span> <span class="nb">str</span>
-    <span class="n">version</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;0.1.0&quot;</span>
+    <span class="n">version</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">"0.1.0"</span>
     <span class="n">title</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
-    <span class="n">description</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
+    <span class="n">description</span><span class="p">:</span> <span class="nb">str</span> <span class="o">=</span> <span class="s2">""</span>
     <span class="n">authors</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">AuthorSpec</span><span class="p">]</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="nb">list</span><span class="p">)</span>
     <span class="n">license</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
     <span class="n">runtime</span><span class="p">:</span> <span class="n">RuntimeSpec</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="n">RuntimeSpec</span><span class="p">)</span>
@@ -4319,28 +4319,28 @@ validation.</p>
     <span class="n">validation</span><span class="p">:</span> <span class="n">ValidationSpec</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="n">ValidationSpec</span><span class="p">)</span>
     <span class="n">entrypoint</span><span class="p">:</span> <span class="n">EntrypointSpec</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="n">EntrypointSpec</span><span class="p">)</span>
 
-    <span class="nd">@field_validator</span><span class="p">(</span><span class="s2">&quot;name&quot;</span><span class="p">)</span>
+    <span class="nd">@field_validator</span><span class="p">(</span><span class="s2">"name"</span><span class="p">)</span>
     <span class="nd">@classmethod</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">validate_name</span><span class="p">(</span>
         <span class="bp">cls</span><span class="p">,</span>
         <span class="n">value</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Validate the spec name used for files and image tags.&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">"""Validate the spec name used for files and image tags."""</span>
 
         <span class="n">cleaned</span> <span class="o">=</span> <span class="n">value</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
         <span class="k">if</span> <span class="ow">not</span> <span class="n">cleaned</span><span class="p">:</span>
-            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;name must not be empty&quot;</span><span class="p">)</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"name must not be empty"</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">cleaned</span>
 
     <span class="nd">@property</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">display_title</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Return the title exposed in generated metadata.&quot;&quot;&quot;</span>
+<span class="w">        </span><span class="sd">"""Return the title exposed in generated metadata."""</span>
 
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">title</span> <span class="ow">or</span> <span class="bp">self</span><span class="o">.</span><span class="n">name</span>
 
     <span class="nd">@classmethod</span>
-    <span class="k">def</span><span class="w"> </span><span class="nf">load</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">path</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">Path</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;TutorialSpec&quot;</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Load a tutorial specification from YAML.</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">load</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">path</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">Path</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">"TutorialSpec"</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""Load a tutorial specification from YAML.</span>
 
 <span class="sd">        Args:</span>
 <span class="sd">            path: Path to a tutorial YAML file.</span>
@@ -4350,15 +4350,15 @@ validation.</p>
 
 <span class="sd">        Raises:</span>
 <span class="sd">            ConfigError: If the file cannot be read or validated.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
 
         <span class="n">spec_path</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">path</span><span class="p">)</span>
         <span class="k">try</span><span class="p">:</span>
             <span class="n">raw</span> <span class="o">=</span> <span class="n">yaml</span><span class="o">.</span><span class="n">safe_load</span><span class="p">(</span><span class="n">spec_path</span><span class="o">.</span><span class="n">read_text</span><span class="p">())</span> <span class="ow">or</span> <span class="p">{}</span>
         <span class="k">except</span> <span class="ne">OSError</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>
-            <span class="k">raise</span> <span class="n">ConfigError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Unable to read </span><span class="si">{</span><span class="n">spec_path</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">exc</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span> <span class="kn">from</span><span class="w"> </span><span class="nn">exc</span>
+            <span class="k">raise</span> <span class="n">ConfigError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Unable to read </span><span class="si">{</span><span class="n">spec_path</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">exc</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span> <span class="kn">from</span><span class="w"> </span><span class="nn">exc</span>
         <span class="k">except</span> <span class="n">yaml</span><span class="o">.</span><span class="n">YAMLError</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>
-            <span class="k">raise</span> <span class="n">ConfigError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Unable to parse </span><span class="si">{</span><span class="n">spec_path</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">exc</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span> <span class="kn">from</span><span class="w"> </span><span class="nn">exc</span>
+            <span class="k">raise</span> <span class="n">ConfigError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Unable to parse </span><span class="si">{</span><span class="n">spec_path</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">exc</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span> <span class="kn">from</span><span class="w"> </span><span class="nn">exc</span>
 
         <span class="k">try</span><span class="p">:</span>
             <span class="k">return</span> <span class="bp">cls</span><span class="o">.</span><span class="n">model_validate</span><span class="p">(</span><span class="n">raw</span><span class="p">)</span>
@@ -4366,41 +4366,41 @@ validation.</p>
             <span class="k">raise</span> <span class="n">ConfigError</span><span class="p">(</span><span class="nb">str</span><span class="p">(</span><span class="n">exc</span><span class="p">))</span> <span class="kn">from</span><span class="w"> </span><span class="nn">exc</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">write</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">path</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">Path</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Write this specification as YAML.</span>
+<span class="w">        </span><span class="sd">"""Write this specification as YAML.</span>
 
 <span class="sd">        Args:</span>
 <span class="sd">            path: Destination file path.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
 
         <span class="n">spec_path</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">path</span><span class="p">)</span>
-        <span class="n">data</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">model_dump</span><span class="p">(</span><span class="n">mode</span><span class="o">=</span><span class="s2">&quot;json&quot;</span><span class="p">,</span> <span class="n">exclude_none</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+        <span class="n">data</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">model_dump</span><span class="p">(</span><span class="n">mode</span><span class="o">=</span><span class="s2">"json"</span><span class="p">,</span> <span class="n">exclude_none</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
         <span class="n">spec_path</span><span class="o">.</span><span class="n">write_text</span><span class="p">(</span><span class="n">yaml</span><span class="o">.</span><span class="n">safe_dump</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">sort_keys</span><span class="o">=</span><span class="kc">False</span><span class="p">))</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">to_manifest_dict</span><span class="p">(</span>
         <span class="bp">self</span><span class="p">,</span>
         <span class="n">image</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Return the reproducibility manifest payload.</span>
+<span class="w">        </span><span class="sd">"""Return the reproducibility manifest payload.</span>
 
 <span class="sd">        Args:</span>
 <span class="sd">            image: Override image tag.  Falls back to</span>
-<span class="sd">                the build spec&#39;s configured image.</span>
+<span class="sd">                the build spec's configured image.</span>
 
 <span class="sd">        Returns:</span>
 <span class="sd">            Dictionary suitable for JSON serialisation.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
 
         <span class="k">return</span> <span class="p">{</span>
-            <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="p">,</span>
-            <span class="s2">&quot;version&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">version</span><span class="p">,</span>
-            <span class="s2">&quot;title&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">display_title</span><span class="p">,</span>
-            <span class="s2">&quot;description&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">description</span><span class="p">,</span>
-            <span class="s2">&quot;base_image&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">build</span><span class="o">.</span><span class="n">base_image</span><span class="p">,</span>
-            <span class="s2">&quot;image&quot;</span><span class="p">:</span> <span class="n">image</span> <span class="ow">or</span> <span class="bp">self</span><span class="o">.</span><span class="n">build</span><span class="o">.</span><span class="n">image</span><span class="p">,</span>
-            <span class="s2">&quot;runtime&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">runtime</span><span class="o">.</span><span class="n">model_dump</span><span class="p">(</span><span class="n">mode</span><span class="o">=</span><span class="s2">&quot;json&quot;</span><span class="p">),</span>
-            <span class="s2">&quot;content&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">content</span><span class="o">.</span><span class="n">model_dump</span><span class="p">(</span><span class="n">mode</span><span class="o">=</span><span class="s2">&quot;json&quot;</span><span class="p">),</span>
-            <span class="s2">&quot;dependencies&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">dependencies</span><span class="o">.</span><span class="n">model_dump</span><span class="p">(</span><span class="n">mode</span><span class="o">=</span><span class="s2">&quot;json&quot;</span><span class="p">),</span>
-            <span class="s2">&quot;entrypoint&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">entrypoint</span><span class="o">.</span><span class="n">model_dump</span><span class="p">(</span><span class="n">mode</span><span class="o">=</span><span class="s2">&quot;json&quot;</span><span class="p">),</span>
+            <span class="s2">"name"</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="p">,</span>
+            <span class="s2">"version"</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">version</span><span class="p">,</span>
+            <span class="s2">"title"</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">display_title</span><span class="p">,</span>
+            <span class="s2">"description"</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">description</span><span class="p">,</span>
+            <span class="s2">"base_image"</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">build</span><span class="o">.</span><span class="n">base_image</span><span class="p">,</span>
+            <span class="s2">"image"</span><span class="p">:</span> <span class="n">image</span> <span class="ow">or</span> <span class="bp">self</span><span class="o">.</span><span class="n">build</span><span class="o">.</span><span class="n">image</span><span class="p">,</span>
+            <span class="s2">"runtime"</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">runtime</span><span class="o">.</span><span class="n">model_dump</span><span class="p">(</span><span class="n">mode</span><span class="o">=</span><span class="s2">"json"</span><span class="p">),</span>
+            <span class="s2">"content"</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">content</span><span class="o">.</span><span class="n">model_dump</span><span class="p">(</span><span class="n">mode</span><span class="o">=</span><span class="s2">"json"</span><span class="p">),</span>
+            <span class="s2">"dependencies"</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">dependencies</span><span class="o">.</span><span class="n">model_dump</span><span class="p">(</span><span class="n">mode</span><span class="o">=</span><span class="s2">"json"</span><span class="p">),</span>
+            <span class="s2">"entrypoint"</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">entrypoint</span><span class="o">.</span><span class="n">model_dump</span><span class="p">(</span><span class="n">mode</span><span class="o">=</span><span class="s2">"json"</span><span class="p">),</span>
         <span class="p">}</span>
 </code></pre></div></td></tr></table></div>
               </details>
@@ -4567,8 +4567,8 @@ validation.</p>
 <span class="normal">180</span>
 <span class="normal">181</span>
 <span class="normal">182</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@classmethod</span>
-<span class="k">def</span><span class="w"> </span><span class="nf">load</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">path</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">Path</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;TutorialSpec&quot;</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Load a tutorial specification from YAML.</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">load</span><span class="p">(</span><span class="bp">cls</span><span class="p">,</span> <span class="n">path</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">Path</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">"TutorialSpec"</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Load a tutorial specification from YAML.</span>
 
 <span class="sd">    Args:</span>
 <span class="sd">        path: Path to a tutorial YAML file.</span>
@@ -4578,15 +4578,15 @@ validation.</p>
 
 <span class="sd">    Raises:</span>
 <span class="sd">        ConfigError: If the file cannot be read or validated.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    """</span>
 
     <span class="n">spec_path</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">path</span><span class="p">)</span>
     <span class="k">try</span><span class="p">:</span>
         <span class="n">raw</span> <span class="o">=</span> <span class="n">yaml</span><span class="o">.</span><span class="n">safe_load</span><span class="p">(</span><span class="n">spec_path</span><span class="o">.</span><span class="n">read_text</span><span class="p">())</span> <span class="ow">or</span> <span class="p">{}</span>
     <span class="k">except</span> <span class="ne">OSError</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>
-        <span class="k">raise</span> <span class="n">ConfigError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Unable to read </span><span class="si">{</span><span class="n">spec_path</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">exc</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span> <span class="kn">from</span><span class="w"> </span><span class="nn">exc</span>
+        <span class="k">raise</span> <span class="n">ConfigError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Unable to read </span><span class="si">{</span><span class="n">spec_path</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">exc</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span> <span class="kn">from</span><span class="w"> </span><span class="nn">exc</span>
     <span class="k">except</span> <span class="n">yaml</span><span class="o">.</span><span class="n">YAMLError</span> <span class="k">as</span> <span class="n">exc</span><span class="p">:</span>
-        <span class="k">raise</span> <span class="n">ConfigError</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Unable to parse </span><span class="si">{</span><span class="n">spec_path</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">exc</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span> <span class="kn">from</span><span class="w"> </span><span class="nn">exc</span>
+        <span class="k">raise</span> <span class="n">ConfigError</span><span class="p">(</span><span class="sa">f</span><span class="s2">"Unable to parse </span><span class="si">{</span><span class="n">spec_path</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">exc</span><span class="si">}</span><span class="s2">"</span><span class="p">)</span> <span class="kn">from</span><span class="w"> </span><span class="nn">exc</span>
 
     <span class="k">try</span><span class="p">:</span>
         <span class="k">return</span> <span class="bp">cls</span><span class="o">.</span><span class="n">model_validate</span><span class="p">(</span><span class="n">raw</span><span class="p">)</span>
@@ -4700,27 +4700,27 @@ the build spec's configured image.</p>
     <span class="bp">self</span><span class="p">,</span>
     <span class="n">image</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="n">Any</span><span class="p">]:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Return the reproducibility manifest payload.</span>
+<span class="w">    </span><span class="sd">"""Return the reproducibility manifest payload.</span>
 
 <span class="sd">    Args:</span>
 <span class="sd">        image: Override image tag.  Falls back to</span>
-<span class="sd">            the build spec&#39;s configured image.</span>
+<span class="sd">            the build spec's configured image.</span>
 
 <span class="sd">    Returns:</span>
 <span class="sd">        Dictionary suitable for JSON serialisation.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    """</span>
 
     <span class="k">return</span> <span class="p">{</span>
-        <span class="s2">&quot;name&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="p">,</span>
-        <span class="s2">&quot;version&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">version</span><span class="p">,</span>
-        <span class="s2">&quot;title&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">display_title</span><span class="p">,</span>
-        <span class="s2">&quot;description&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">description</span><span class="p">,</span>
-        <span class="s2">&quot;base_image&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">build</span><span class="o">.</span><span class="n">base_image</span><span class="p">,</span>
-        <span class="s2">&quot;image&quot;</span><span class="p">:</span> <span class="n">image</span> <span class="ow">or</span> <span class="bp">self</span><span class="o">.</span><span class="n">build</span><span class="o">.</span><span class="n">image</span><span class="p">,</span>
-        <span class="s2">&quot;runtime&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">runtime</span><span class="o">.</span><span class="n">model_dump</span><span class="p">(</span><span class="n">mode</span><span class="o">=</span><span class="s2">&quot;json&quot;</span><span class="p">),</span>
-        <span class="s2">&quot;content&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">content</span><span class="o">.</span><span class="n">model_dump</span><span class="p">(</span><span class="n">mode</span><span class="o">=</span><span class="s2">&quot;json&quot;</span><span class="p">),</span>
-        <span class="s2">&quot;dependencies&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">dependencies</span><span class="o">.</span><span class="n">model_dump</span><span class="p">(</span><span class="n">mode</span><span class="o">=</span><span class="s2">&quot;json&quot;</span><span class="p">),</span>
-        <span class="s2">&quot;entrypoint&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">entrypoint</span><span class="o">.</span><span class="n">model_dump</span><span class="p">(</span><span class="n">mode</span><span class="o">=</span><span class="s2">&quot;json&quot;</span><span class="p">),</span>
+        <span class="s2">"name"</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">name</span><span class="p">,</span>
+        <span class="s2">"version"</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">version</span><span class="p">,</span>
+        <span class="s2">"title"</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">display_title</span><span class="p">,</span>
+        <span class="s2">"description"</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">description</span><span class="p">,</span>
+        <span class="s2">"base_image"</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">build</span><span class="o">.</span><span class="n">base_image</span><span class="p">,</span>
+        <span class="s2">"image"</span><span class="p">:</span> <span class="n">image</span> <span class="ow">or</span> <span class="bp">self</span><span class="o">.</span><span class="n">build</span><span class="o">.</span><span class="n">image</span><span class="p">,</span>
+        <span class="s2">"runtime"</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">runtime</span><span class="o">.</span><span class="n">model_dump</span><span class="p">(</span><span class="n">mode</span><span class="o">=</span><span class="s2">"json"</span><span class="p">),</span>
+        <span class="s2">"content"</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">content</span><span class="o">.</span><span class="n">model_dump</span><span class="p">(</span><span class="n">mode</span><span class="o">=</span><span class="s2">"json"</span><span class="p">),</span>
+        <span class="s2">"dependencies"</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">dependencies</span><span class="o">.</span><span class="n">model_dump</span><span class="p">(</span><span class="n">mode</span><span class="o">=</span><span class="s2">"json"</span><span class="p">),</span>
+        <span class="s2">"entrypoint"</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">entrypoint</span><span class="o">.</span><span class="n">model_dump</span><span class="p">(</span><span class="n">mode</span><span class="o">=</span><span class="s2">"json"</span><span class="p">),</span>
     <span class="p">}</span>
 </code></pre></div></td></tr></table></div>
             </details>
@@ -4761,17 +4761,17 @@ the build spec's configured image.</p>
 <span class="normal">146</span>
 <span class="normal">147</span>
 <span class="normal">148</span>
-<span class="normal">149</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@field_validator</span><span class="p">(</span><span class="s2">&quot;name&quot;</span><span class="p">)</span>
+<span class="normal">149</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@field_validator</span><span class="p">(</span><span class="s2">"name"</span><span class="p">)</span>
 <span class="nd">@classmethod</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">validate_name</span><span class="p">(</span>
     <span class="bp">cls</span><span class="p">,</span>
     <span class="n">value</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Validate the spec name used for files and image tags.&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">"""Validate the spec name used for files and image tags."""</span>
 
     <span class="n">cleaned</span> <span class="o">=</span> <span class="n">value</span><span class="o">.</span><span class="n">strip</span><span class="p">()</span>
     <span class="k">if</span> <span class="ow">not</span> <span class="n">cleaned</span><span class="p">:</span>
-        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;name must not be empty&quot;</span><span class="p">)</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">"name must not be empty"</span><span class="p">)</span>
     <span class="k">return</span> <span class="n">cleaned</span>
 </code></pre></div></td></tr></table></div>
             </details>
@@ -4838,14 +4838,14 @@ the build spec's configured image.</p>
 <span class="normal">191</span>
 <span class="normal">192</span>
 <span class="normal">193</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">write</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">path</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">Path</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Write this specification as YAML.</span>
+<span class="w">    </span><span class="sd">"""Write this specification as YAML.</span>
 
 <span class="sd">    Args:</span>
 <span class="sd">        path: Destination file path.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    """</span>
 
     <span class="n">spec_path</span> <span class="o">=</span> <span class="n">Path</span><span class="p">(</span><span class="n">path</span><span class="p">)</span>
-    <span class="n">data</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">model_dump</span><span class="p">(</span><span class="n">mode</span><span class="o">=</span><span class="s2">&quot;json&quot;</span><span class="p">,</span> <span class="n">exclude_none</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+    <span class="n">data</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">model_dump</span><span class="p">(</span><span class="n">mode</span><span class="o">=</span><span class="s2">"json"</span><span class="p">,</span> <span class="n">exclude_none</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
     <span class="n">spec_path</span><span class="o">.</span><span class="n">write_text</span><span class="p">(</span><span class="n">yaml</span><span class="o">.</span><span class="n">safe_dump</span><span class="p">(</span><span class="n">data</span><span class="p">,</span> <span class="n">sort_keys</span><span class="o">=</span><span class="kc">False</span><span class="p">))</span>
 </code></pre></div></td></tr></table></div>
             </details>
@@ -4897,9 +4897,9 @@ the build spec's configured image.</p>
 <span class="normal">14</span>
 <span class="normal">15</span>
 <span class="normal">16</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">ValidationCheck</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;A single validation check result.&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">"""A single validation check result."""</span>
 
-    <span class="n">model_config</span> <span class="o">=</span> <span class="n">ConfigDict</span><span class="p">(</span><span class="n">extra</span><span class="o">=</span><span class="s2">&quot;forbid&quot;</span><span class="p">)</span>
+    <span class="n">model_config</span> <span class="o">=</span> <span class="n">ConfigDict</span><span class="p">(</span><span class="n">extra</span><span class="o">=</span><span class="s2">"forbid"</span><span class="p">)</span>
 
     <span class="n">name</span><span class="p">:</span> <span class="nb">str</span>
     <span class="n">passed</span><span class="p">:</span> <span class="nb">bool</span>
@@ -5015,9 +5015,9 @@ the build spec's configured image.</p>
 <span class="normal">75</span>
 <span class="normal">76</span>
 <span class="normal">77</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">ValidationReport</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Machine-readable tutorial validation report.&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">"""Machine-readable tutorial validation report."""</span>
 
-    <span class="n">model_config</span> <span class="o">=</span> <span class="n">ConfigDict</span><span class="p">(</span><span class="n">extra</span><span class="o">=</span><span class="s2">&quot;forbid&quot;</span><span class="p">)</span>
+    <span class="n">model_config</span> <span class="o">=</span> <span class="n">ConfigDict</span><span class="p">(</span><span class="n">extra</span><span class="o">=</span><span class="s2">"forbid"</span><span class="p">)</span>
 
     <span class="n">passed</span><span class="p">:</span> <span class="nb">bool</span>
     <span class="n">checks</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">ValidationCheck</span><span class="p">]</span> <span class="o">=</span> <span class="n">Field</span><span class="p">(</span><span class="n">default_factory</span><span class="o">=</span><span class="nb">list</span><span class="p">)</span>
@@ -5027,9 +5027,9 @@ the build spec's configured image.</p>
     <span class="nd">@classmethod</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">combine</span><span class="p">(</span>
         <span class="bp">cls</span><span class="p">,</span>
-        <span class="n">reports</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="s2">&quot;ValidationReport&quot;</span><span class="p">],</span>
-    <span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;ValidationReport&quot;</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Combine several reports into one report.</span>
+        <span class="n">reports</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="s2">"ValidationReport"</span><span class="p">],</span>
+    <span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">"ValidationReport"</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">"""Combine several reports into one report.</span>
 
 <span class="sd">        Args:</span>
 <span class="sd">            reports: List of reports to merge.</span>
@@ -5037,7 +5037,7 @@ the build spec's configured image.</p>
 <span class="sd">        Returns:</span>
 <span class="sd">            A single ``ValidationReport`` with all</span>
 <span class="sd">            checks, errors, and warnings aggregated.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
 
         <span class="n">checks</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">ValidationCheck</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
         <span class="n">errors</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
@@ -5054,23 +5054,23 @@ the build spec's configured image.</p>
         <span class="p">)</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">render_json</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Render report as stable JSON.</span>
+<span class="w">        </span><span class="sd">"""Render report as stable JSON.</span>
 
 <span class="sd">        Returns:</span>
 <span class="sd">            Pretty-printed JSON string.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
 
-        <span class="k">return</span> <span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">model_dump</span><span class="p">(</span><span class="n">mode</span><span class="o">=</span><span class="s2">&quot;json&quot;</span><span class="p">),</span> <span class="n">indent</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span> <span class="o">+</span> <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span>
+        <span class="k">return</span> <span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">model_dump</span><span class="p">(</span><span class="n">mode</span><span class="o">=</span><span class="s2">"json"</span><span class="p">),</span> <span class="n">indent</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span> <span class="o">+</span> <span class="s2">"</span><span class="se">\n</span><span class="s2">"</span>
 
     <span class="k">def</span><span class="w"> </span><span class="nf">write</span><span class="p">(</span>
         <span class="bp">self</span><span class="p">,</span>
         <span class="n">path</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">Path</span><span class="p">,</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Write report JSON to disk.</span>
+<span class="w">        </span><span class="sd">"""Write report JSON to disk.</span>
 
 <span class="sd">        Args:</span>
 <span class="sd">            path: Destination file path.</span>
-<span class="sd">        &quot;&quot;&quot;</span>
+<span class="sd">        """</span>
 
         <span class="n">Path</span><span class="p">(</span><span class="n">path</span><span class="p">)</span><span class="o">.</span><span class="n">write_text</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">render_json</span><span class="p">())</span>
 </code></pre></div></td></tr></table></div>
@@ -5196,9 +5196,9 @@ checks, errors, and warnings aggregated.</p>
 <span class="normal">56</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="nd">@classmethod</span>
 <span class="k">def</span><span class="w"> </span><span class="nf">combine</span><span class="p">(</span>
     <span class="bp">cls</span><span class="p">,</span>
-    <span class="n">reports</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="s2">&quot;ValidationReport&quot;</span><span class="p">],</span>
-<span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">&quot;ValidationReport&quot;</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Combine several reports into one report.</span>
+    <span class="n">reports</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="s2">"ValidationReport"</span><span class="p">],</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="s2">"ValidationReport"</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">"""Combine several reports into one report.</span>
 
 <span class="sd">    Args:</span>
 <span class="sd">        reports: List of reports to merge.</span>
@@ -5206,7 +5206,7 @@ checks, errors, and warnings aggregated.</p>
 <span class="sd">    Returns:</span>
 <span class="sd">        A single ``ValidationReport`` with all</span>
 <span class="sd">        checks, errors, and warnings aggregated.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    """</span>
 
     <span class="n">checks</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">ValidationCheck</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
     <span class="n">errors</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">=</span> <span class="p">[]</span>
@@ -5276,13 +5276,13 @@ checks, errors, and warnings aggregated.</p>
 <span class="normal">63</span>
 <span class="normal">64</span>
 <span class="normal">65</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">def</span><span class="w"> </span><span class="nf">render_json</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Render report as stable JSON.</span>
+<span class="w">    </span><span class="sd">"""Render report as stable JSON.</span>
 
 <span class="sd">    Returns:</span>
 <span class="sd">        Pretty-printed JSON string.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    """</span>
 
-    <span class="k">return</span> <span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">model_dump</span><span class="p">(</span><span class="n">mode</span><span class="o">=</span><span class="s2">&quot;json&quot;</span><span class="p">),</span> <span class="n">indent</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span> <span class="o">+</span> <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span>
+    <span class="k">return</span> <span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">model_dump</span><span class="p">(</span><span class="n">mode</span><span class="o">=</span><span class="s2">"json"</span><span class="p">),</span> <span class="n">indent</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span> <span class="o">+</span> <span class="s2">"</span><span class="se">\n</span><span class="s2">"</span>
 </code></pre></div></td></tr></table></div>
             </details>
     </div>
@@ -5352,11 +5352,11 @@ checks, errors, and warnings aggregated.</p>
     <span class="bp">self</span><span class="p">,</span>
     <span class="n">path</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">Path</span><span class="p">,</span>
 <span class="p">)</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Write report JSON to disk.</span>
+<span class="w">    </span><span class="sd">"""Write report JSON to disk.</span>
 
 <span class="sd">    Args:</span>
 <span class="sd">        path: Destination file path.</span>
-<span class="sd">    &quot;&quot;&quot;</span>
+<span class="sd">    """</span>
 
     <span class="n">Path</span><span class="p">(</span><span class="n">path</span><span class="p">)</span><span class="o">.</span><span class="n">write_text</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">render_json</span><span class="p">())</span>
 </code></pre></div></td></tr></table></div>
@@ -5410,9 +5410,9 @@ checks, errors, and warnings aggregated.</p>
 <span class="normal">105</span>
 <span class="normal">106</span>
 <span class="normal">107</span></pre></div></td><td class="code"><div><pre><span></span><code><span class="k">class</span><span class="w"> </span><span class="nc">ValidationSpec</span><span class="p">(</span><span class="n">BaseModel</span><span class="p">):</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;Validation checks enabled for a tutorial.&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">"""Validation checks enabled for a tutorial."""</span>
 
-    <span class="n">model_config</span> <span class="o">=</span> <span class="n">ConfigDict</span><span class="p">(</span><span class="n">extra</span><span class="o">=</span><span class="s2">&quot;forbid&quot;</span><span class="p">)</span>
+    <span class="n">model_config</span> <span class="o">=</span> <span class="n">ConfigDict</span><span class="p">(</span><span class="n">extra</span><span class="o">=</span><span class="s2">"forbid"</span><span class="p">)</span>
 
     <span class="n">execute_notebooks</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>
     <span class="n">check_imports</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span>
@@ -5510,7 +5510,7 @@ checks, errors, and warnings aggregated.</p>
       <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.instant", "navigation.instant.prefetch", "navigation.tabs", "navigation.tabs.sticky", "navigation.sections", "navigation.top", "navigation.tracking", "navigation.indexes", "search.suggest", "search.highlight", "search.share", "content.code.copy", "content.code.annotate", "content.tabs.link", "toc.follow"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
     
     
-      <script src="../assets/javascripts/bundle.79ae519e.min.js"></script>
+      <script src="../assets/javascripts/bundle.d7400e89.min.js"></script>
       
         <script src="../assets/javascripts/tables.js"></script>
       

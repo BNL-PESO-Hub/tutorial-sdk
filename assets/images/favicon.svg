@@ -1,9 +1,34 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
-  <rect width="512" height="512" fill="#000000"/>
-  <path d="M 165,382 L 256,435 L 412,345 L 412,165 L 256,75 L 100,165 L 100,345 L 130,362"
-        fill="none" stroke="#ffffff" stroke-width="24" stroke-linecap="round" stroke-linejoin="round"/>
-  <path d="M 185,215 L 245,256 L 185,297"
-        fill="none" stroke="#ffffff" stroke-width="24" stroke-linecap="round" stroke-linejoin="round"/>
-  <line x1="270" y1="297" x2="325" y2="297"
-        stroke="#ffffff" stroke-width="24" stroke-linecap="round"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100%" height="100%">
+  <defs>
+    <!-- Define the base hexagon path for the background and clip mask -->
+    <path id="hex" d="M 43.1,8.5 Q 50,4.5 56.9,8.5 L 81.1,22.5 Q 88,26.5 88,34.5 L 88,65.5 Q 88,73.5 81.1,77.5 L 56.9,91.5 Q 50,95.5 43.1,91.5 L 18.9,77.5 Q 12,73.5 12,65.5 L 12,34.5 Q 12,26.5 18.9,22.5 Z" />
+    <clipPath id="hex-clip">
+      <use href="#hex" />
+    </clipPath>
+  </defs>
+
+  <!-- 1. White Base Fill -->
+  <use href="#hex" fill="#ffffff" />
+
+  <!-- 2. Light Blue Diagonal Split (Clipped to Hexagon) -->
+  <polygon points="0,72 100,22 100,100 0,100" fill="#dcebf7" clip-path="url(#hex-clip)" />
+
+  <!-- 3. Hexagon Borders -->
+  <!-- Thin dark inner outline -->
+  <use href="#hex" fill="none" stroke="#082238" stroke-width="11.5" stroke-linejoin="round" />
+  <!-- Main blue border -->
+  <use href="#hex" fill="none" stroke="#134e7a" stroke-width="10" stroke-linejoin="round" />
+
+  <!-- 4. Terminal Prompt ( >_ ) -->
+  <!-- Thin dark outline for the prompt symbols -->
+  <g fill="none" stroke="#082238" stroke-width="7.2" stroke-linecap="round" stroke-linejoin="round">
+    <polyline points="30.5,31.5 45,46 30.5,60.5" />
+    <line x1="51.5" y1="63" x2="72" y2="63" />
+  </g>
+  
+  <!-- Main blue fill for the prompt symbols -->
+  <g fill="none" stroke="#134e7a" stroke-width="6" stroke-linecap="round" stroke-linejoin="round">
+    <polyline points="30.5,31.5 45,46 30.5,60.5" />
+    <line x1="51.5" y1="63" x2="72" y2="63" />
+  </g>
 </svg>
