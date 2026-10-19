@@ -12,6 +12,8 @@ A **declarative, reproducible tutorial packaging system** and command-line tool 
 
 Tutorial environments tend to drift over time: Dockerfiles diverge from notebooks, dependencies go unpinned, and validation is left to CI pipelines assembled by hand. `tutorial-sdk` addresses this by driving the full lifecycle — resolving and locking dependencies, synthesizing deterministic Dockerfiles, validating notebooks locally and inside built containers, and publishing images through a standardized CI workflow — all from a single declarative config.
 
+**Online Documentation:** https://bnl-peso-hub.github.io/tutorial-sdk/
+
 > [!IMPORTANT]
 > _This project is currently under active development. While we strive for stability, expect API changes and evolving best practices as we approach our first official release._
 
@@ -24,21 +26,6 @@ Tutorial environments tend to drift over time: Dockerfiles diverge from notebook
 * **Notebook-Aware Container Validation**: Runs comprehensive local checks (assets, dependencies, notebook error detection) as well as full container validation (verifying built containers start successfully and that JupyterLab runs flawlessly inside).
 * **GitHub Actions Integration**: Built-in support for standard, thin CI workflows (`tutorial-sdk ci`) that validate, build, test, and publish images from pull requests and releases.
 * **Extensible Scaffolding Templates**: Starter templates to quickly spin up beginner workshops, notebooks, course modules, or custom lab exercises.
-
----
-
-## Documentation
-
-For comprehensive guides, API references, and architecture details, refer to the following documentation files:
-
-- **[Getting Started](docs/index.md)**: Features, quickstart commands, and standard project layouts.
-- **[Configuration Schema](docs/config-schema.md)**: Reference manual for all options in `tutorial.yml`.
-- **[Architecture & Design](docs/architecture.md)**: Deep dive into the modular layers, container validation model, and extension override blocks.
-- **[CLI Reference](docs/cli.md)**: Reference details for CLI commands and usage examples.
-- **[Public API](docs/api-public.md) & [Full SDK API](docs/api-package.md) References**: API surface specifications and implementation details for Orchestration (`TutorialProject`), Spec Models (`TutorialSpec`), Scaffolding, Generators, Builders, and Validators.
-
-> [!NOTE]
-> Online Documentation: https://bnl-peso-hub.github.io/tutorial-sdk/
 
 ---
 
