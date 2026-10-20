@@ -15,6 +15,8 @@ jobs:
   build:
     name: Build distribution
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v7
         with:
@@ -46,7 +48,6 @@ jobs:
       url: https://pypi.org/p/tutorial-sdk
     permissions:
       id-token: write
-      attestations: write
     steps:
       - name: Download distribution artifacts
         uses: actions/download-artifact@v8
@@ -56,3 +57,5 @@ jobs:
 
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          attestations: false

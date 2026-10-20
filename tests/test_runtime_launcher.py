@@ -1,5 +1,6 @@
 from unittest.mock import patch, MagicMock
 
+from tutorial_sdk.backend import DockerCliBackend
 from tutorial_sdk.spec import TutorialSpec
 from tutorial_sdk.runtime.launcher import (
     RuntimeLauncher,
@@ -10,7 +11,7 @@ from tutorial_sdk.runtime.launcher import (
 @patch("subprocess.run")
 def test_launcher_run_default(mock_run):
     spec = TutorialSpec(name="run-test")
-    launcher = RuntimeLauncher(spec, root=".")
+    launcher = RuntimeLauncher(spec, root=".", backend=DockerCliBackend())
 
     mock_run.return_value = MagicMock(returncode=0)
     result = launcher.run()
@@ -33,7 +34,7 @@ def test_launcher_run_default(mock_run):
 @patch("subprocess.run")
 def test_launcher_run_custom_port(mock_run):
     spec = TutorialSpec(name="port-test")
-    launcher = RuntimeLauncher(spec, root=".")
+    launcher = RuntimeLauncher(spec, root=".", backend=DockerCliBackend())
 
     mock_run.return_value = MagicMock(returncode=0)
     launcher.run(port=9999)
@@ -45,7 +46,7 @@ def test_launcher_run_custom_port(mock_run):
 @patch("subprocess.run")
 def test_launcher_run_shell_mode(mock_run):
     spec = TutorialSpec(name="shell-test")
-    launcher = RuntimeLauncher(spec, root=".")
+    launcher = RuntimeLauncher(spec, root=".", backend=DockerCliBackend())
 
     mock_run.return_value = MagicMock(returncode=0)
     launcher.run(shell=True)
@@ -64,7 +65,7 @@ def test_launcher_run_with_custom_image(mock_run):
         name="img-test",
         build={"image": "ghcr.io/org/tut:v1"},
     )
-    launcher = RuntimeLauncher(spec, root=".")
+    launcher = RuntimeLauncher(spec, root=".", backend=DockerCliBackend())
 
     mock_run.return_value = MagicMock(returncode=0)
     result = launcher.run()
@@ -77,7 +78,7 @@ def test_launcher_run_with_custom_image(mock_run):
 @patch("subprocess.run")
 def test_launcher_run_with_parameter_image(mock_run):
     spec = TutorialSpec(name="param-test")
-    launcher = RuntimeLauncher(spec, root=".")
+    launcher = RuntimeLauncher(spec, root=".", backend=DockerCliBackend())
 
     mock_run.return_value = MagicMock(returncode=0)
     result = launcher.run(image="parameter-override:v3")

@@ -1,10 +1,10 @@
 """Docker image builder adapter."""
 
-import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
-from ..errors import BuildError
+from ..backend import ContainerBackend, get_backend
+from ..errors import BackendError, BuildError
 from ..spec import TutorialSpec
 
 
@@ -26,16 +26,21 @@ class DockerBuilder:
         self,
         spec: TutorialSpec,
         root: str | Path = ".",
+        backend: ContainerBackend | None = None,
     ) -> None:
         """Create a Docker builder.
 
         Args:
             spec: Parsed tutorial specification.
             root: Tutorial project root directory.
+            backend: Optional container backend override.
+                Defaults to auto-detection via
+                :func:`tutorial_sdk.backend.get_backend`.
         """
 
         self.spec = spec
         self.root = Path(root)
+        self.backend = backend
 
     def build(
         self,
@@ -43,7 +48,7 @@ class DockerBuilder:
         no_cache: bool | None = None,
         platform: str | None = None,
     ) -> BuildResult:
-        """Run ``docker build`` for the tutorial.
+        """Build the tutorial image.
 
         Args:
             image: Override image tag.
@@ -56,39 +61,35 @@ class DockerBuilder:
             A ``BuildResult`` on success.
 
         Raises:
-            BuildError: If the build exits non-zero.
+            BuildError: If the build fails or no container
+                backend is available.
+            ConfigError: If ``TUTORIAL_SDK_BACKEND`` names an
+                unknown backend.
         """
 
         image = image or self.spec.build.image or f"{self.spec.name}:latest"
         dockerfile = self.root / self.spec.build.dockerfile
-        command = [
-            "docker",
-            "build",
-            "-f",
-            str(dockerfile),
-            "-t",
-            image,
-        ]
 
         if no_cache is None:
             cache_enabled = self.spec.build.cache
         else:
             cache_enabled = not no_cache
-        if not cache_enabled:
-            command.append("--no-cache")
-        if platform:
-            command.extend(["--platform", platform])
-        command.append(str(self.root))
 
-        completed = subprocess.run(
-            command,
-            check=False,
-            capture_output=True,
-            text=True,
-        )
-        if completed.returncode != 0:
-            raise BuildError(completed.stderr.strip() or "Docker build failed")
+        try:
+            backend = self.backend or get_backend()
+            result = backend.build_image(
+                context=self.root,
+                dockerfile=dockerfile,
+                tag=image,
+                no_cache=not cache_enabled,
+                platform=platform,
+            )
+        except BackendError as exc:
+            # Covers ImageBuildFailed and BackendUnavailableError.
+            raise BuildError(str(exc)) from exc
+
         return BuildResult(
-            image=image,
+            image=result.image,
             dockerfile=dockerfile,
+            digest=result.image_id,
         )
