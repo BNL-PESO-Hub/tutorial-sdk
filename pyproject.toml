@@ -36,6 +36,9 @@ Repository = "https://github.com/BNL-PESO-Hub/tutorial-sdk.git"
 Issues = "https://github.com/BNL-PESO-Hub/tutorial-sdk/issues"
 
 [project.optional-dependencies]
+docker = [
+    "docker~=7.2",
+]
 dev = [
     "pytest>=9.0.0",
     "pytest-cov>=7.0.0",
@@ -75,6 +78,14 @@ ignore = ["D202"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# Live-daemon contract tests are opt-in: `pytest -m docker`.
+addopts = "-m 'not docker'"
+markers = [
+    "docker: needs a reachable Docker daemon (opt-in via `-m docker`)",
+]
 
 [tool.coverage.run]
 source = ["src"]

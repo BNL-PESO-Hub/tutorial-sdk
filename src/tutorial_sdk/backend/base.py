@@ -13,6 +13,7 @@ objects) may leak through this interface.
 
 from __future__ import annotations
 
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Iterator, Protocol, runtime_checkable
@@ -214,9 +215,50 @@ class ContainerBackend(Protocol):
         src: Path,
         dest: str,
     ) -> None:
-        """Copy a host file or directory into a container."""
+        """Copy a host file or directory into a container.
+
+        ``dest`` is the full destination path of the copied file or
+        directory inside the container, and its parent directory
+        must already exist.  Callers must not rely on copying
+        *into* an existing directory: the CLI backend follows
+        ``docker cp`` and nests ``src`` inside it, which other
+        backends need not do.
+
+        Raises:
+            CopyFailed: If the copy cannot be performed.
+        """
         ...
 
     def stream_logs(self, container: ContainerHandle) -> Iterator[str]:
         """Yield container log lines as they are produced."""
         ...
+
+
+def observe_running(
+    probe: Callable[[], bool],
+    timeout: float,
+    poll: float,
+) -> bool:
+    """Run the ``wait_running`` observation window over ``probe``.
+
+    Shared by all backends so the contract semantics cannot drift:
+    returns ``False`` as soon as ``probe()`` reports the container
+    is not running, and ``True`` only if it still runs when the
+    ``timeout`` window ends.  It never returns early on success.
+
+    Args:
+        probe: Zero-argument callable returning the running state.
+        timeout: Total observation window in seconds.
+        poll: Interval between probes in seconds.
+
+    Returns:
+        Whether the container survived the window.
+    """
+    deadline = time.monotonic() + timeout
+    while True:
+        if not probe():
+            return False
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            return True
+        time.sleep(min(poll, remaining))

@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import shutil
 import subprocess
-import time
 from pathlib import Path
 from typing import Iterator
 
@@ -23,6 +22,7 @@ from .base import (
     ImageBuildResult,
     LogCallback,
     RunExit,
+    observe_running,
 )
 from .errors import ContainerStartFailed, CopyFailed, ImageBuildFailed
 
@@ -198,14 +198,9 @@ class DockerCliBackend:
         poll: float = 0.25,
     ) -> bool:
         """Poll container state for the observation window."""
-        deadline = time.monotonic() + timeout
-        while True:
-            if not self.is_running(container):
-                return False
-            remaining = deadline - time.monotonic()
-            if remaining <= 0:
-                return True
-            time.sleep(min(poll, remaining))
+        return observe_running(
+            lambda: self.is_running(container), timeout, poll
+        )
 
     def logs(self, container: ContainerHandle) -> str:
         """Return container logs, preferring stderr over stdout."""
@@ -261,7 +256,7 @@ class DockerCliBackend:
             returncode=completed.returncode,
         )
 
-    # -- forward-looking helpers --------------------------------------------
+    # -- file copy and log streaming ----------------------------------------
 
     def copy_in(
         self,

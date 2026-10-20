@@ -16,6 +16,9 @@ Selection precedence (highest first):
 
 At every level, ``None`` and ``"auto"`` mean "no preference" and
 defer to the next level.
+
+``DockerSdkBackend`` is exported lazily: importing this package
+never imports ``docker_sdk`` (or the optional ``docker`` package).
 """
 
 from __future__ import annotations
@@ -42,6 +45,7 @@ __all__ = [
     "ContainerStartFailed",
     "CopyFailed",
     "DockerCliBackend",
+    "DockerSdkBackend",
     "ExecResult",
     "ImageBuildFailed",
     "ImageBuildResult",
@@ -53,6 +57,15 @@ __all__ = [
 _ENV_VAR = "TUTORIAL_SDK_BACKEND"
 _CHOICES = ("auto", "docker-cli", "docker-sdk")
 _SDK_MODULE = f"{__name__}.docker_sdk"
+
+
+def __getattr__(name: str) -> object:
+    """Resolve ``DockerSdkBackend`` on first access (PEP 562)."""
+    if name == "DockerSdkBackend":
+        from .docker_sdk import DockerSdkBackend
+
+        return DockerSdkBackend
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
 def _load_sdk_backend() -> ContainerBackend:
