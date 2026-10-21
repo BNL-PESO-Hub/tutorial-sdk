@@ -16,8 +16,11 @@ from __future__ import annotations
 import itertools
 import json
 import os
+import signal
 import socket
 import subprocess
+import sys
+import threading
 import time
 import uuid
 from pathlib import Path
@@ -58,6 +61,21 @@ DOCKERFILES = {
         'CMD ["sh", "-c", "echo line-1; echo line-2 >&2; echo line-3; '
         'sleep 300"]\n'
     ),
+    # Foreground runs: writes to both streams and exits 7 at once.
+    "exiter": (
+        f"FROM {BASE_IMAGE}\n"
+        'CMD ["sh", "-c", "echo to-stdout; echo to-stderr >&2; exit 7"]\n'
+    ),
+    # Foreground runs: alive long enough to inspect, then exits 0.
+    "napper": f'FROM {BASE_IMAGE}\nCMD ["sleep", "3"]\n',
+    # Foreground runs: shuts down cleanly on SIGINT/SIGTERM.
+    "graceful": (
+        f"FROM {BASE_IMAGE}\n"
+        'CMD ["sh", "-c", "trap \'echo bye; exit 0\' INT TERM; '
+        'echo ready; while :; do sleep 0.2; done"]\n'
+    ),
+    # Foreground runs: silent for longer than a short client timeout.
+    "quiet": f'FROM {BASE_IMAGE}\nCMD ["sh", "-c", "sleep 4; echo done"]\n',
 }
 
 
@@ -332,3 +350,181 @@ def test_validator_report_parity_missing_jupyter(backend, images):
         "JupyterLab command not available in container: "
     )
     assert "executable file not found" in jl.message
+
+
+# ---------------------------------------------------------------------------
+# Foreground runs
+# ---------------------------------------------------------------------------
+
+
+def _containers_of(image: str, *, running: bool = False) -> list[str]:
+    command = ["docker", "ps", "-q", "--filter", f"ancestor={image}"]
+    if not running:
+        command.insert(2, "-a")
+    result = subprocess.run(command, capture_output=True, text=True)
+    return result.stdout.split()
+
+
+def _wait_until(predicate, timeout: float = 15.0) -> bool:
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if predicate():
+            return True
+        time.sleep(0.1)
+    return predicate()
+
+
+def test_run_foreground_exit_code_and_streams(backend, images, capfd):
+    image = images["exiter"]
+    result = backend.run_foreground(image)
+    assert result.returncode == 7
+    assert result.image == image
+    assert result.command == ("docker", "run", "--rm", image)
+    captured = capfd.readouterr()
+    assert "to-stdout" in captured.out
+    assert "to-stderr" in captured.err
+    assert "to-stderr" not in captured.out
+    assert _wait_until(lambda: not _containers_of(image))
+
+
+def test_run_foreground_publishes_ports(backend, images):
+    image, port = images["napper"], _free_port()
+    seen: list[str] = []
+
+    def watch():
+        def published():
+            result = subprocess.run(
+                [
+                    "docker",
+                    "ps",
+                    "--filter",
+                    f"ancestor={image}",
+                    "--format",
+                    "{{.Ports}}",
+                ],
+                capture_output=True,
+                text=True,
+            )
+            seen.append(result.stdout.strip())
+            return f":{port}->8888/tcp" in seen[-1]
+
+        _wait_until(published, timeout=10)
+
+    watcher = threading.Thread(target=watch)
+    watcher.start()
+    result = backend.run_foreground(image, ports={8888: port})
+    watcher.join()
+    assert result.returncode == 0
+    assert result.command == (
+        "docker",
+        "run",
+        "--rm",
+        "-p",
+        f"{port}:8888",
+        image,
+    )
+    assert any(f":{port}->8888/tcp" in ports for ports in seen), seen
+    assert _wait_until(lambda: not _containers_of(image))
+
+
+def test_run_foreground_missing_image_exits_125(backend):
+    image = f"tutorial-sdk-contract-missing:{RUN_ID}"
+    assert backend.run_foreground(image).returncode == 125
+
+
+_CHILD = (
+    "import sys\n"
+    "from tutorial_sdk.backend import get_backend\n"
+    "backend = get_backend(sys.argv[1])\n"
+    "result = backend.run_foreground(sys.argv[2])\n"
+    "print('RC', result.returncode, flush=True)\n"
+)
+
+
+def _run_and_interrupt(backend_name: str, image: str, signals: int):
+    """Run in a child process group and Ctrl-C it like a terminal does.
+
+    The signal goes to the whole process group, so it reaches the
+    ``docker`` CLI child as well as Python, exactly as in a terminal.
+    """
+    child = subprocess.Popen(
+        [sys.executable, "-c", _CHILD, backend_name, image],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        start_new_session=True,
+    )
+    try:
+        assert _wait_until(lambda: _containers_of(image, running=True))
+        time.sleep(0.5)  # let the run reach its steady state
+        for _ in range(signals):
+            os.killpg(child.pid, signal.SIGINT)
+            time.sleep(0.5)
+        out, err = child.communicate(timeout=30)
+    finally:
+        if child.poll() is None:
+            child.kill()
+            child.communicate()
+    return child.returncode, out, err
+
+
+def test_ctrl_c_stops_and_removes_container(backend, images):
+    image = images["graceful"]
+    code, out, err = _run_and_interrupt(backend.name, image, signals=1)
+    assert _wait_until(lambda: not _containers_of(image)), "container leaked"
+    if backend.name == "docker-sdk":
+        # The signal is forwarded, shutdown output is shown, and the
+        # container's own exit code is returned.
+        assert "bye" in out
+        assert "RC 0" in out
+        assert code == 0
+    else:
+        # The docker CLI forwards the signal and Python's
+        # KeyboardInterrupt propagates (historical behavior).
+        assert "KeyboardInterrupt" in err
+        assert code != 0
+
+
+@pytest.fixture
+def sdk_backend(images):
+    try:
+        return get_backend("docker-sdk")
+    except BackendUnavailableError as exc:
+        pytest.skip(f"docker-sdk unavailable: {exc}")
+
+
+def test_sdk_second_ctrl_c_kills_unresponsive_container(sdk_backend, images):
+    # ``sleep`` as PID 1 ignores SIGINT, so only the escalation stops it.
+    image = images["sleeper"]
+    began = time.monotonic()
+    code, out, _ = _run_and_interrupt(sdk_backend.name, image, signals=2)
+    assert "RC 137" in out
+    assert code == 0
+    assert time.monotonic() - began < 15
+    assert _wait_until(lambda: not _containers_of(image))
+
+
+def test_sdk_sigterm_is_forwarded(sdk_backend, images, capfd):
+    image = images["graceful"]
+
+    def terminate_when_running():
+        if _wait_until(lambda: _containers_of(image, running=True)):
+            time.sleep(0.5)
+            os.kill(os.getpid(), signal.SIGTERM)
+
+    trigger = threading.Thread(target=terminate_when_running)
+    trigger.start()
+    result = sdk_backend.run_foreground(image)
+    trigger.join()
+    assert result.returncode == 0
+    assert "bye" in capfd.readouterr().out
+    assert _wait_until(lambda: not _containers_of(image))
+
+
+def test_sdk_stream_survives_silence_beyond_client_timeout(
+    sdk_backend, images, capfd, monkeypatch
+):
+    monkeypatch.setattr(sdk_backend._client.api, "timeout", 2)
+    result = sdk_backend.run_foreground(images["quiet"])  # silent for 4 s
+    assert result.returncode == 0
+    assert "done" in capfd.readouterr().out

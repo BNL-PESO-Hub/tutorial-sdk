@@ -7,11 +7,12 @@ the optional ``docker`` package (``pip install
 requires it.
 
 The container runtime surface (``run_detached``, ``is_running``,
-``wait_running``, ``logs``, ``exec``, ``remove``) plus ``copy_in`` /
-``stream_logs`` are implemented natively via docker-py.
-``build_image`` and ``run_foreground`` delegate to an internal
-``DockerCliBackend``, ensuring this backend can be used across all
-operations while preserving CLI streaming and interactive TTY semantics.
+``wait_running``, ``logs``, ``exec``, ``remove``), foreground runs
+(``run_foreground``), and ``copy_in`` / ``stream_logs`` are
+implemented natively via docker-py.  ``build_image`` and interactive
+shell runs (``run_foreground(..., interactive_shell=True)``) delegate
+to an internal ``DockerCliBackend``: the CLI's build output is what
+users expect, and docker-py has no terminal attach.
 
 All ``docker.errors.*`` and ``requests`` exceptions are translated
 into the backend error hierarchy here; nothing above this module
@@ -23,10 +24,14 @@ from __future__ import annotations
 import codecs
 import io
 import os
+import signal
+import sys
 import tarfile
+import threading
+import time
 from contextlib import contextmanager
 from pathlib import Path, PurePosixPath
-from typing import TYPE_CHECKING, Any, Iterator
+from typing import TYPE_CHECKING, Any, Callable, Iterator, TextIO
 
 from ..errors import BackendError, BackendUnavailableError
 from .base import (
@@ -37,7 +42,7 @@ from .base import (
     RunExit,
     observe_running,
 )
-from .docker_cli import DockerCliBackend
+from .docker_cli import DockerCliBackend, foreground_command
 from .errors import ContainerStartFailed, CopyFailed
 
 if TYPE_CHECKING:
@@ -48,6 +53,24 @@ if TYPE_CHECKING:
 #: mirrors the ``docker exec`` CLI, which exits 1 on daemon errors
 #: such as "container is not running".
 _DAEMON_ERROR_EXIT_CODE = 1
+
+#: Exit code of a foreground run the daemon refused to create or
+#: start (missing image, port already allocated, ...).  ``docker run``
+#: exits 125 when the error comes from the daemon itself.
+_RUN_ERROR_EXIT_CODE = 125
+
+#: Seconds a container may take to exit after the first forwarded
+#: signal before it is killed (the ``docker stop`` default).
+_STOP_GRACE = 10.0
+
+#: Seconds to keep draining container output after it exits.
+_DRAIN_TIMEOUT = 5.0
+
+#: Interval at which the foreground run checks for signals and exit.
+_POLL_INTERVAL = 0.1
+
+#: Signals forwarded to a foreground container, like ``docker run``.
+_FORWARDED_SIGNALS = (signal.SIGINT, signal.SIGTERM)
 
 
 def _daemon_message(exc: Exception) -> str:
@@ -63,6 +86,14 @@ def _daemon_message(exc: Exception) -> str:
 def _decode(data: bytes | None) -> str:
     """Decode an exec/log byte stream, tolerating bad UTF-8."""
     return (data or b"").decode("utf-8", "replace").strip()
+
+
+def _port_bindings(ports: dict[int, int] | None) -> dict[str, int]:
+    """Translate ``{container: host}`` mappings for docker-py."""
+    return {
+        f"{container_port}/tcp": host_port
+        for container_port, host_port in (ports or {}).items()
+    }
 
 
 def _connect(docker: Any) -> DockerClient:
@@ -121,6 +152,118 @@ def _tar_single(src: Path, arcname: str) -> bytes:
     with tarfile.open(fileobj=buffer, mode="w") as archive:
         archive.add(str(src), arcname=arcname, filter=_as_root)
     return buffer.getvalue()
+
+
+@contextmanager
+def _trap_signals() -> Iterator[list[int]]:
+    """Record SIGINT/SIGTERM instead of acting on them, for the duration.
+
+    Yields the list the received signal numbers are appended to.  The
+    handler only records, so a signal can never interrupt the run
+    half-way through a step; the caller polls the list instead.
+
+    Handlers can only be installed from the main thread; elsewhere
+    nothing is installed (signals are delivered to the main thread
+    only).  Signals the process ignores (``SIG_IGN``) or whose handler
+    was not installed from Python are left alone.  Previous handlers
+    are restored on exit.
+    """
+    received: list[int] = []
+    if threading.current_thread() is not threading.main_thread():
+        yield received
+        return
+
+    def _record(signum: int, frame: Any) -> None:
+        received.append(signum)
+
+    previous = {}
+    try:
+        for signum in _FORWARDED_SIGNALS:
+            handler = signal.getsignal(signum)
+            if handler is not None and handler is not signal.SIG_IGN:
+                previous[signum] = handler
+                signal.signal(signum, _record)
+        yield received
+    finally:
+        for signum, handler in previous.items():
+            signal.signal(signum, handler)
+
+
+class _Worker(threading.Thread):
+    """Daemon thread that records its target's result or exception."""
+
+    def __init__(self, target: Callable[[], Any], name: str) -> None:
+        super().__init__(name=name, daemon=True)
+        self._target_fn = target
+        self.result: Any = None
+        self.error: BaseException | None = None
+
+    def run(self) -> None:
+        try:
+            self.result = self._target_fn()
+        except BaseException as exc:  # re-raised by the caller
+            self.error = exc
+
+
+def _byte_writer(sink: TextIO) -> Callable[..., None]:
+    """Return a writer forwarding raw container output to ``sink``.
+
+    Bytes go to the underlying binary buffer when there is one, so
+    output is passed through unchanged (partial lines, progress
+    bars); otherwise they are decoded incrementally.
+    """
+    buffer = getattr(sink, "buffer", None)
+    if buffer is not None:
+        sink.flush()
+
+        def _write_bytes(data: bytes, final: bool = False) -> None:
+            if data:
+                buffer.write(data)
+                buffer.flush()
+
+        return _write_bytes
+
+    decoder = codecs.getincrementaldecoder("utf-8")("replace")
+
+    def _write_text(data: bytes, final: bool = False) -> None:
+        text = decoder.decode(data, final=final)
+        if text:
+            sink.write(text)
+            sink.flush()
+
+    return _write_text
+
+
+def _pump(stream: Iterator[bytes], sink: TextIO) -> None:
+    """Copy a container log stream to ``sink`` until it ends."""
+    write = _byte_writer(sink)
+    for chunk in stream:
+        write(chunk)
+    write(b"", final=True)
+
+
+def _drain(pumps: list[_Worker], streams: list[Any]) -> None:
+    """Let output pumps finish (bounded), then close their streams.
+
+    Closing a stream unblocks a pump still reading from it.
+    """
+    deadline = time.monotonic() + _DRAIN_TIMEOUT
+    try:
+        for pump in pumps:
+            pump.join(max(0.0, deadline - time.monotonic()))
+    finally:
+        for stream in streams:
+            stream.close()
+
+
+def _report_run_error(exc: Exception) -> int:
+    """Print a daemon error to stderr, as ``docker run`` does.
+
+    Returns:
+        ``docker run``'s exit code for daemon errors (125).
+    """
+    print(_daemon_message(exc), file=sys.stderr)
+    return _RUN_ERROR_EXIT_CODE
 
 
 class DockerSdkBackend:
@@ -233,6 +376,8 @@ class DockerSdkBackend:
             log_callback=log_callback,
         )
 
+    # -- foreground runs -----------------------------------------------------
+
     def run_foreground(
         self,
         image: str,
@@ -240,12 +385,174 @@ class DockerSdkBackend:
         ports: dict[int, int] | None = None,
         interactive_shell: bool = False,
     ) -> RunExit:
-        """Run in the foreground (delegated to ``DockerCliBackend``)."""
-        return self._delegate("foreground runs").run_foreground(
-            image,
-            ports=ports,
-            interactive_shell=interactive_shell,
-        )
+        """Run a container until it exits, streaming its output.
+
+        Mirrors ``docker run --rm -p HOST:CONTAINER IMAGE``: a missing
+        image is pulled; the container's stdout and stderr are copied
+        to ``sys.stdout`` and ``sys.stderr``; the container is removed
+        afterwards in every case.  A daemon error before the container
+        runs is printed to ``sys.stderr`` and reported as exit code
+        125, like ``docker run``.
+
+        When called from the main thread, SIGINT and SIGTERM are
+        forwarded to the container, which then has 10 seconds to exit
+        before it is killed; a second signal kills it at once.  The
+        container's exit code is returned either way.
+
+        Interactive shells (``interactive_shell=True``) need a
+        terminal attach, which docker-py does not provide, and are
+        delegated to ``DockerCliBackend``.
+
+        Raises:
+            BackendUnavailableError: If the daemon becomes unreachable,
+                or an interactive shell is requested and the
+                ``docker`` binary is not on PATH.
+            BackendError: For other unexpected daemon errors.
+        """
+        if interactive_shell:
+            return self._delegate("interactive shell runs").run_foreground(
+                image,
+                ports=ports,
+                interactive_shell=True,
+            )
+
+        command = tuple(foreground_command(image, ports))
+        with self._guard("Running container"):
+            try:
+                container = self._create(image, ports)
+            except self._errors.APIError as exc:
+                returncode = _report_run_error(exc)
+            else:
+                try:
+                    returncode = self._run_to_exit(container)
+                finally:
+                    self._discard(container)
+        return RunExit(image=image, command=command, returncode=returncode)
+
+    def _create(
+        self,
+        image: str,
+        ports: dict[int, int] | None,
+    ) -> Container:
+        """Create (not start) a container, pulling a missing image."""
+        bindings = _port_bindings(ports)
+        options = {"ports": bindings} if bindings else {}
+        try:
+            return self._client.containers.create(image, **options)
+        except self._errors.ImageNotFound:
+            print(f"Unable to find image '{image}' locally", file=sys.stderr)
+            self._client.images.pull(image)
+            return self._client.containers.create(image, **options)
+
+    def _run_to_exit(self, container: Container) -> int:
+        """Start ``container``, stream its output, and wait for exit.
+
+        Output is read through two followed log streams (stdout and
+        stderr) rather than ``attach``: they replay from the start, so
+        nothing is lost before they open, and docker-py disables the
+        client read timeout on them, so a container that stays silent
+        longer than that timeout keeps streaming.
+        """
+        waiter = _Worker(container.wait, "tutorial-sdk-wait")
+        streams: list[Any] = []
+        pumps: list[_Worker] = []
+        with _trap_signals() as received:
+            try:
+                container.start()
+            except self._errors.APIError as exc:  # e.g. port in use
+                return _report_run_error(exc)
+            try:
+                for want_stdout, sink in (
+                    (True, sys.stdout),
+                    (False, sys.stderr),
+                ):
+                    try:
+                        stream = container.logs(
+                            stdout=want_stdout,
+                            stderr=not want_stdout,
+                            stream=True,
+                            follow=True,
+                        )
+                    except self._errors.APIError as exc:
+                        # e.g. a logging driver that cannot be read;
+                        # warn once (stdout is opened first).
+                        if want_stdout:
+                            print(
+                                f"Container output unavailable: "
+                                f"{_daemon_message(exc)}",
+                                file=sys.stderr,
+                            )
+                        continue
+                    streams.append(stream)
+                    pump = _Worker(
+                        lambda s=stream, k=sink: _pump(s, k),
+                        "tutorial-sdk-output",
+                    )
+                    pump.start()
+                    pumps.append(pump)
+                waiter.start()
+                self._supervise(container, waiter, received)
+            finally:
+                _drain(pumps, streams)
+
+        if waiter.error is not None:
+            raise waiter.error
+        status = waiter.result or {}
+        code = status.get("StatusCode")
+        return int(code) if code is not None else _RUN_ERROR_EXIT_CODE
+
+    def _supervise(
+        self,
+        container: Container,
+        waiter: _Worker,
+        received: list[int],
+    ) -> None:
+        """Wait for ``waiter``, forwarding signals and escalating.
+
+        The first signal in ``received`` is forwarded as-is; a second
+        one, or the container outliving the grace period, kills it.
+        """
+        forwarded_at: float | None = None
+        killed = False
+        while waiter.is_alive():
+            if received and not killed:
+                signum = received.pop(0)
+                if forwarded_at is None:
+                    forwarded_at = time.monotonic()
+                    print(
+                        "Stopping container (interrupt again to force)...",
+                        file=sys.stderr,
+                    )
+                    self._signal(container, signal.Signals(signum).name)
+                else:
+                    killed = True
+                    self._signal(container, None)
+                continue
+            if (
+                forwarded_at is not None
+                and not killed
+                and time.monotonic() - forwarded_at >= _STOP_GRACE
+            ):
+                killed = True
+                self._signal(container, None)
+            waiter.join(_POLL_INTERVAL)
+
+    def _signal(self, container: Container, name: str | None) -> None:
+        """Send ``name`` (``None`` = SIGKILL), ignoring a gone container."""
+        try:
+            if name is None:
+                container.kill()
+            else:
+                container.kill(signal=name)
+        except self._errors.APIError:
+            pass  # already exited or removed
+
+    def _discard(self, container: Container) -> None:
+        """Remove a foreground container, ignoring daemon errors."""
+        try:
+            container.remove(force=True)
+        except self._errors.APIError:
+            pass
 
     # -- container lifecycle -------------------------------------------------
 
@@ -270,16 +577,12 @@ class DockerSdkBackend:
                 except errors.APIError:
                     pass  # e.g. removal already in progress
 
-            port_map = {
-                f"{container_port}/tcp": host_port
-                for container_port, host_port in (ports or {}).items()
-            }
             try:
                 started = self._client.containers.run(
                     image,
                     detach=True,
                     name=name,
-                    ports=port_map or None,
+                    ports=_port_bindings(ports) or None,
                     auto_remove=remove,
                 )
             except errors.APIError as exc:

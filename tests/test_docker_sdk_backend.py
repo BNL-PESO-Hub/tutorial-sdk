@@ -8,9 +8,12 @@ package and are skipped on a base install.
 
 import io
 import os
+import signal
 import subprocess
 import sys
 import tarfile
+import threading
+import time
 from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
@@ -25,7 +28,9 @@ from tutorial_sdk.backend import (  # noqa: E402
     DockerCliBackend,
     get_backend,
 )
+from tutorial_sdk.backend import docker_sdk  # noqa: E402
 from tutorial_sdk.backend.base import ContainerHandle  # noqa: E402
+from tutorial_sdk.backend.docker_cli import foreground_command  # noqa: E402
 from tutorial_sdk.backend.docker_sdk import DockerSdkBackend  # noqa: E402
 from tutorial_sdk.backend.errors import (  # noqa: E402
     ContainerStartFailed,
@@ -89,6 +94,49 @@ class MockContainer:
         self.log_chunks = []
         self.stream = None
         self.calls = []
+        # Foreground-run scripting.
+        self.out_chunks = []
+        self.err_chunks = []
+        self.streams = []
+        self.logs_error = None
+        self.start_error = None
+        self.start_hook = None
+        self.exit_status = {"StatusCode": 0}
+        self.wait_error = None
+        self.wait_hook = None
+        self.blocks_until_killed = False
+        self.kill_effects = {}  # signal -> exit code that ends wait()
+        self.kill_error = None
+        self._exited = threading.Event()
+
+    def start(self):
+        self.calls.append(("start",))
+        if self.start_hook is not None:
+            self.start_hook(self)
+        if self.start_error is not None:
+            raise self.start_error
+        self.status = "running"
+
+    def wait(self):
+        self.calls.append(("wait",))
+        if self.wait_hook is not None:
+            self.wait_hook(self)
+        if self.wait_error is not None:
+            raise self.wait_error
+        if self.blocks_until_killed and not self._exited.wait(10):
+            raise AssertionError("container was never stopped")
+        return self.exit_status
+
+    def kill(self, signal=None):
+        self.calls.append(("kill", signal))
+        if self.kill_error is not None:
+            raise self.kill_error
+        if signal in self.kill_effects:
+            self.exit_status = {"StatusCode": self.kill_effects[signal]}
+            self._exited.set()
+
+    def kills(self):
+        return [c[1] for c in self.calls if c[0] == "kill"]
 
     def remove(self, force=False):
         self.calls.append(("remove", force))
@@ -103,8 +151,15 @@ class MockContainer:
 
     def logs(self, stdout=True, stderr=True, stream=False, follow=False):
         self.calls.append(("logs", stdout, stderr, stream, follow))
+        if stream and self.logs_error is not None:
+            raise self.logs_error
         if stream:
-            self.stream = MockStream(self.log_chunks)
+            if stdout and stderr:
+                chunks = self.log_chunks
+            else:
+                chunks = self.out_chunks if stdout else self.err_chunks
+            self.stream = MockStream(chunks)
+            self.streams.append(self.stream)
             return self.stream
         return (self.stdout if stdout else b"") + (
             self.stderr if stderr else b""
@@ -124,6 +179,10 @@ class MockContainers:
         self.run_error = None
         self.get_error = None
         self.next_id = "f" * 64
+        self.create_calls = []
+        self.create_errors = []
+        self.created = None
+        self.prepare = None  # callable scripting each created container
 
     def add(self, container):
         self.by_key[container.id] = container
@@ -145,10 +204,33 @@ class MockContainers:
         name = kwargs.get("name") or "random_name"
         return self.add(MockContainer(self.next_id, name, status="created"))
 
+    def create(self, image, **kwargs):
+        self.create_calls.append((image, kwargs))
+        if self.create_errors:
+            raise self.create_errors.pop(0)
+        self.created = self.add(
+            MockContainer(self.next_id, "random_name", status="created")
+        )
+        if self.prepare is not None:
+            self.prepare(self.created)
+        return self.created
+
+
+class MockImages:
+    def __init__(self):
+        self.pull_calls = []
+        self.pull_error = None
+
+    def pull(self, repository, **kwargs):
+        self.pull_calls.append((repository, kwargs))
+        if self.pull_error is not None:
+            raise self.pull_error
+
 
 class MockClient:
     def __init__(self):
         self.containers = MockContainers()
+        self.images = MockImages()
         self.ping_error = None
 
     def ping(self):
@@ -477,11 +559,11 @@ def test_stream_logs_closes_stream_on_early_exit(backend, client):
 
 
 # ---------------------------------------------------------------------------
-# Delegation to the CLI backend (build_image, run_foreground)
+# Delegation to the CLI backend (build_image, interactive shells)
 # ---------------------------------------------------------------------------
 
 
-def test_build_and_foreground_delegate_to_cli(backend):
+def test_build_and_shell_delegate_to_cli(backend):
     cli = mock.create_autospec(DockerCliBackend, instance=True)
     cli.available.return_value = True
     backend._cli = cli
@@ -508,12 +590,302 @@ def test_build_and_foreground_delegate_to_cli(backend):
     )
 
 
+def test_plain_foreground_run_does_not_delegate(backend, client):
+    cli = mock.create_autospec(DockerCliBackend, instance=True)
+    backend._cli = cli
+    backend.run_foreground("t:1")
+    cli.run_foreground.assert_not_called()
+    assert client.containers.create_calls == [("t:1", {})]
+
+
 def test_delegation_without_binary_is_unavailable(backend):
     with mock.patch("shutil.which", return_value=None):
         with pytest.raises(BackendUnavailableError, match="'docker' binary"):
             backend.build_image(Path("."), Path("Dockerfile"), "t")
-        with pytest.raises(BackendUnavailableError, match="Docker CLI"):
-            backend.run_foreground("t")
+        with pytest.raises(
+            BackendUnavailableError, match="interactive shell runs"
+        ):
+            backend.run_foreground("t", interactive_shell=True)
+        # A plain foreground run needs no docker binary.
+        assert backend.run_foreground("t").returncode == 0
+
+
+# ---------------------------------------------------------------------------
+# run_foreground (native)
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def guard_sigterm():
+    """Fail (instead of killing pytest) if a SIGTERM goes unhandled."""
+
+    def _unhandled(signum, frame):
+        raise AssertionError("SIGTERM reached the default handler")
+
+    previous = signal.signal(signal.SIGTERM, _unhandled)
+    yield _unhandled
+    signal.signal(signal.SIGTERM, previous)
+
+
+def script(client, **attrs):
+    """Apply ``attrs`` to every container ``create`` returns."""
+
+    def prepare(container):
+        for key, value in attrs.items():
+            setattr(container, key, value)
+
+    client.containers.prepare = prepare
+
+
+def send_signals(*signums, after_kills=True):
+    """Return a ``wait_hook`` that signals this process.
+
+    Each signal after the first is sent once the previous one has
+    been turned into a ``kill`` call, as a user pressing Ctrl-C twice.
+    """
+
+    def hook(container):
+        for i, signum in enumerate(signums):
+            if after_kills:
+                deadline = time.monotonic() + 5
+                while len(container.kills()) < i:
+                    assert time.monotonic() < deadline, "signal not handled"
+                    time.sleep(0.01)
+            os.kill(os.getpid(), signum)
+
+    return hook
+
+
+def test_run_foreground_streams_and_returns_exit_code(backend, client, capsys):
+    script(
+        client,
+        out_chunks=[b"hel", b"lo\n", b"partial"],
+        err_chunks=[b"warn\n"],
+        exit_status={"StatusCode": 7},
+    )
+    result = backend.run_foreground("img:1", ports={8888: 9999})
+
+    assert result.returncode == 7
+    assert result.image == "img:1"
+    assert result.command == (
+        "docker",
+        "run",
+        "--rm",
+        "-p",
+        "9999:8888",
+        "img:1",
+    )
+    assert client.containers.create_calls == [
+        ("img:1", {"ports": {"8888/tcp": 9999}})
+    ]
+    captured = capsys.readouterr()
+    assert captured.out == "hello\npartial"
+    assert captured.err == "warn\n"
+
+    container = client.containers.created
+    names = [c[0] for c in container.calls]
+    assert names[0] == "start"
+    assert names[-1] == "remove"
+    assert ("remove", True) in container.calls
+    assert ("logs", True, False, True, True) in container.calls
+    assert ("logs", False, True, True, True) in container.calls
+    assert all(s.closed for s in container.streams)
+
+
+def test_run_foreground_command_matches_cli_backend(backend):
+    ports = {8888: 9000, 22: 2222}
+    result = backend.run_foreground("img:2", ports=ports)
+    assert list(result.command) == foreground_command("img:2", ports)
+
+
+def test_run_foreground_decodes_for_text_only_sinks(
+    backend, client, monkeypatch
+):
+    out = io.StringIO()
+    monkeypatch.setattr(sys, "stdout", out)
+    script(client, out_chunks=[b"caf\xc3", b"\xa9\n\xc3"])
+    backend.run_foreground("img")
+    assert out.getvalue() == "café\n\ufffd"
+
+
+def test_run_foreground_pulls_missing_image(backend, client, capsys):
+    client.containers.create_errors = [docker.errors.ImageNotFound("nope")]
+    assert backend.run_foreground("lib/img:3").returncode == 0
+    assert client.images.pull_calls == [("lib/img:3", {})]
+    assert len(client.containers.create_calls) == 2
+    assert "Unable to find image 'lib/img:3' locally" in capsys.readouterr().err
+
+
+def test_run_foreground_failed_pull_returns_125(backend, client, capsys):
+    client.containers.create_errors = [docker.errors.ImageNotFound("nope")]
+    client.images.pull_error = api_error("pull access denied for img")
+    result = backend.run_foreground("img")
+    assert result.returncode == 125
+    assert result.command == ("docker", "run", "--rm", "img")
+    err = capsys.readouterr().err
+    assert "Error response from daemon: pull access denied for img" in err
+    assert client.containers.created is None  # nothing to clean up
+
+
+def test_run_foreground_start_failure_returns_125_and_removes(
+    backend, client, capsys
+):
+    script(client, start_error=api_error("port is already allocated"))
+    assert backend.run_foreground("img", ports={8888: 80}).returncode == 125
+    assert "port is already allocated" in capsys.readouterr().err
+    container = client.containers.created
+    assert [c[0] for c in container.calls] == ["start", "remove"]
+
+
+def test_run_foreground_unreadable_logs_still_reports_exit(
+    backend, client, capsys
+):
+    script(
+        client,
+        logs_error=api_error("logging driver does not support reading"),
+        exit_status={"StatusCode": 3},
+    )
+    assert backend.run_foreground("img").returncode == 3
+    err = capsys.readouterr().err
+    assert err.count("Container output unavailable:") == 1
+    assert "does not support reading" in err
+
+
+def test_run_foreground_missing_status_code_is_125(backend, client):
+    script(client, exit_status={"Error": None})
+    assert backend.run_foreground("img").returncode == 125
+
+
+def test_run_foreground_daemon_lost_is_unavailable(backend, client):
+    script(client, wait_error=requests.exceptions.ConnectionError("gone"))
+    with pytest.raises(BackendUnavailableError, match="Running container"):
+        backend.run_foreground("img")
+    assert ("remove", True) in client.containers.created.calls
+
+
+def test_run_foreground_unexpected_daemon_error(backend, client):
+    script(client, wait_error=api_error("boom"))
+    with pytest.raises(BackendError, match="Running container failed"):
+        backend.run_foreground("img")
+    assert ("remove", True) in client.containers.created.calls
+
+
+def test_run_foreground_remove_errors_are_ignored(backend, client):
+    script(client, remove_error=not_found())
+    assert backend.run_foreground("img").returncode == 0
+
+
+@pytest.mark.parametrize(
+    ("signum", "name"),
+    [(signal.SIGINT, "SIGINT"), (signal.SIGTERM, "SIGTERM")],
+)
+def test_signal_is_forwarded_and_exit_code_returned(
+    backend, client, capsys, guard_sigterm, signum, name
+):
+    script(
+        client,
+        blocks_until_killed=True,
+        kill_effects={name: 0},
+        wait_hook=send_signals(signum),
+    )
+    result = backend.run_foreground("img")
+    assert result.returncode == 0
+    container = client.containers.created
+    assert container.kills() == [name]
+    assert ("remove", True) in container.calls
+    assert "Stopping container" in capsys.readouterr().err
+    # Handlers are restored afterwards.
+    assert signal.getsignal(signal.SIGINT) is signal.default_int_handler
+    assert signal.getsignal(signal.SIGTERM) is guard_sigterm
+
+
+def test_second_signal_kills(backend, client, guard_sigterm):
+    script(
+        client,
+        blocks_until_killed=True,
+        kill_effects={None: 137},  # SIGINT is ignored by the container
+        wait_hook=send_signals(signal.SIGINT, signal.SIGINT),
+    )
+    assert backend.run_foreground("img").returncode == 137
+    assert client.containers.created.kills() == ["SIGINT", None]
+
+
+def test_grace_period_expiry_kills(backend, client, monkeypatch):
+    monkeypatch.setattr(docker_sdk, "_STOP_GRACE", 0.3)
+    script(
+        client,
+        blocks_until_killed=True,
+        kill_effects={None: 137},
+        wait_hook=send_signals(signal.SIGINT),
+    )
+    began = time.monotonic()
+    assert backend.run_foreground("img").returncode == 137
+    assert client.containers.created.kills() == ["SIGINT", None]
+    assert time.monotonic() - began < 5
+
+
+def test_kill_of_exited_container_is_ignored(backend, client, monkeypatch):
+    monkeypatch.setattr(docker_sdk, "_STOP_GRACE", 0.2)
+
+    def hook(container):
+        os.kill(os.getpid(), signal.SIGINT)
+        deadline = time.monotonic() + 5
+        while len(container.kills()) < 2:  # forwarded, then escalated
+            assert time.monotonic() < deadline
+            time.sleep(0.01)
+
+    script(
+        client,
+        kill_error=api_error("container is not running"),
+        exit_status={"StatusCode": 0},
+        wait_hook=hook,
+    )
+    assert backend.run_foreground("img").returncode == 0
+
+
+def test_signal_during_start_is_forwarded_once_running(backend, client):
+    # Delivered on the main thread while ``start()`` is in progress.
+    script(
+        client,
+        start_hook=lambda c: os.kill(os.getpid(), signal.SIGINT),
+        blocks_until_killed=True,
+        kill_effects={"SIGINT": 130},
+    )
+    assert backend.run_foreground("img").returncode == 130
+    assert client.containers.created.kills() == ["SIGINT"]
+
+
+def test_ignored_sigint_stays_ignored(backend, client):
+    previous = signal.signal(signal.SIGINT, signal.SIG_IGN)
+    try:
+        script(
+            client,
+            exit_status={"StatusCode": 0},
+            wait_hook=lambda c: os.kill(os.getpid(), signal.SIGINT),
+        )
+        assert backend.run_foreground("img").returncode == 0
+        assert client.containers.created.kills() == []
+        assert signal.getsignal(signal.SIGINT) is signal.SIG_IGN
+    finally:
+        signal.signal(signal.SIGINT, previous)
+
+
+def test_run_from_worker_thread_leaves_signals_alone(backend, client):
+    before = signal.getsignal(signal.SIGINT)
+    seen = {}
+
+    def hook(container):
+        seen["handler"] = signal.getsignal(signal.SIGINT)
+
+    script(client, exit_status={"StatusCode": 4}, wait_hook=hook)
+    result = {}
+    worker = threading.Thread(
+        target=lambda: result.update(r=backend.run_foreground("img"))
+    )
+    worker.start()
+    worker.join(10)
+    assert result["r"].returncode == 4
+    assert seen["handler"] is before
 
 
 # ---------------------------------------------------------------------------

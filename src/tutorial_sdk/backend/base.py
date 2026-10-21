@@ -55,7 +55,11 @@ class ExecResult:
 
 @dataclass(frozen=True)
 class RunExit:
-    """Outcome of a foreground (blocking) container run."""
+    """Outcome of a foreground (blocking) container run.
+
+    ``command`` is the equivalent ``docker run`` invocation, reported
+    identically by every backend.
+    """
 
     image: str
     command: tuple[str, ...]
@@ -190,9 +194,12 @@ class ContainerBackend(Protocol):
     ) -> RunExit:
         """Run a container in the foreground until it exits.
 
-        The container is removed on exit (``--rm`` semantics).
-        Standard streams are inherited from the calling process
-        so interactive sessions behave like ``docker run``.
+        The container's stdout and stderr go to the caller's stdout
+        and stderr, and the container is removed on exit, including
+        after an interrupt (``--rm`` semantics).  Interrupting the run
+        (SIGINT/SIGTERM) asks the container to stop; whether the
+        interrupt then propagates or the exit code is returned is
+        backend-specific.
 
         Args:
             image: Image tag to run.

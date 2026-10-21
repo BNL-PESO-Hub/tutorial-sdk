@@ -29,6 +29,41 @@ from .errors import ContainerStartFailed, CopyFailed, ImageBuildFailed
 _DOCKER_MISSING_MSG = "Docker is not installed or not on PATH."
 
 
+def port_args(ports: dict[int, int] | None) -> list[str]:
+    """Translate ``{container: host}`` mappings to ``-p`` flags."""
+    args: list[str] = []
+    for container_port, host_port in (ports or {}).items():
+        args.extend(["-p", f"{host_port}:{container_port}"])
+    return args
+
+
+def foreground_command(
+    image: str,
+    ports: dict[int, int] | None = None,
+    interactive_shell: bool = False,
+) -> list[str]:
+    """Return the ``docker run`` command for a foreground run.
+
+    Every backend reports this command in ``RunExit.command`` so that
+    ``RunResult`` does not depend on the backend in use.
+
+    Args:
+        image: Image tag to run.
+        ports: Optional port mapping of ``{container_port: host_port}``.
+        interactive_shell: If ``True``, override the entrypoint with
+            an interactive shell.
+
+    Returns:
+        The command as a list of arguments.
+    """
+    command = ["docker", "run", "--rm"]
+    command.extend(port_args(ports))
+    if interactive_shell:
+        command.extend(["-it", "--entrypoint", "/bin/sh"])
+    command.append(image)
+    return command
+
+
 class DockerCliBackend:
     """Container backend backed by the ``docker`` CLI."""
 
@@ -75,14 +110,6 @@ class DockerCliBackend:
             )
         except FileNotFoundError as exc:
             raise BackendUnavailableError(_DOCKER_MISSING_MSG) from exc
-
-    @staticmethod
-    def _port_args(ports: dict[int, int] | None) -> list[str]:
-        """Translate ``{container: host}`` mappings to ``-p`` flags."""
-        args: list[str] = []
-        for container_port, host_port in (ports or {}).items():
-            args.extend(["-p", f"{host_port}:{container_port}"])
-        return args
 
     # -- image build -------------------------------------------------------
 
@@ -156,8 +183,7 @@ class DockerCliBackend:
     ) -> ContainerHandle:
         """Start a container with ``docker run -d``."""
         if name:
-            # Ensure the container doesn't already exist from a
-            # stale run.
+            # Ensure the container doesn't already exist from a stale run.
             self._run(["docker", "rm", "-f", name])
 
         command = ["docker", "run", "-d"]
@@ -165,7 +191,7 @@ class DockerCliBackend:
             command.append("--rm")
         if name:
             command.extend(["--name", name])
-        command.extend(self._port_args(ports))
+        command.extend(port_args(ports))
         command.append(image)
 
         result = self._run(command)
@@ -242,12 +268,13 @@ class DockerCliBackend:
         ports: dict[int, int] | None = None,
         interactive_shell: bool = False,
     ) -> RunExit:
-        """Run ``docker run --rm`` inheriting the host streams."""
-        command = ["docker", "run", "--rm"]
-        command.extend(self._port_args(ports))
-        if interactive_shell:
-            command.extend(["-it", "--entrypoint", "/bin/sh"])
-        command.append(image)
+        """Run ``docker run --rm`` inheriting the host streams.
+
+        The ``docker`` process shares the terminal, so Ctrl-C reaches
+        it directly and it forwards the signal to the container; the
+        resulting ``KeyboardInterrupt`` propagates to the caller.
+        """
+        command = foreground_command(image, ports, interactive_shell)
 
         completed = self._run(command, capture=False)
         return RunExit(
