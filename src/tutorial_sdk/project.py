@@ -3,6 +3,7 @@
 import json
 from pathlib import Path
 
+from .backend import ContainerBackend
 from .config import DEFAULT_CONFIG
 from .builder import BuildResult, LocalBuilder
 from .resolver import ResolvedTutorialProject, TutorialResolver
@@ -175,6 +176,7 @@ class TutorialProject:
         strict: bool = False,
         container: bool = False,
         image: str | None = None,
+        backend: ContainerBackend | str | None = None,
     ) -> ValidationReport:
         """Run configured validation checks.
 
@@ -185,6 +187,10 @@ class TutorialProject:
                 runtime validation.
             image: Override image tag for container
                 validation.
+            backend: Container backend instance or name for
+                container validation.  A name takes precedence
+                over ``TUTORIAL_SDK_BACKEND`` and
+                ``build.backend``.
 
         Returns:
             Combined ``ValidationReport``.
@@ -200,6 +206,7 @@ class TutorialProject:
                 ContainerValidator(
                     self.spec,
                     self.root,
+                    backend=backend,
                 ).validate(image=image)
             )
         report = ValidationReport.combine(reports)
@@ -226,6 +233,7 @@ class TutorialProject:
         image: str | None = None,
         no_cache: bool | None = None,
         platform: str | None = None,
+        backend: ContainerBackend | str | None = None,
     ) -> BuildResult:
         """Generate a Dockerfile and build the container image.
 
@@ -235,6 +243,9 @@ class TutorialProject:
                 layer caching.
             platform: Target platform (e.g.
                 ``linux/amd64``).
+            backend: Container backend instance or name.  A name
+                takes precedence over ``TUTORIAL_SDK_BACKEND`` and
+                ``build.backend``.
 
         Returns:
             A ``BuildResult`` with the image tag and
@@ -248,10 +259,15 @@ class TutorialProject:
             image=image,
             no_cache=no_cache,
             platform=platform,
+            backend=backend,
         )
 
     def run(
-        self, image: str | None = None, port: int = 8888, shell: bool = False
+        self,
+        image: str | None = None,
+        port: int = 8888,
+        shell: bool = False,
+        backend: ContainerBackend | str | None = None,
     ) -> RunResult:
         """Run the tutorial container locally.
 
@@ -260,6 +276,9 @@ class TutorialProject:
             port: Host port to bind.
             shell: If ``True``, override entrypoint
                 with an interactive shell.
+            backend: Container backend instance or name.  A name
+                takes precedence over ``TUTORIAL_SDK_BACKEND`` and
+                ``build.backend``.
 
         Returns:
             A ``RunResult`` with the container exit
@@ -269,6 +288,7 @@ class TutorialProject:
         return RuntimeLauncher(
             self.spec,
             self.root,
+            backend=backend,
         ).run(
             image=image,
             port=port,

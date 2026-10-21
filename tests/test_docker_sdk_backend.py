@@ -22,6 +22,7 @@ import pytest
 
 docker = pytest.importorskip("docker")
 requests = pytest.importorskip("requests")
+urllib3 = pytest.importorskip("urllib3")
 
 from tutorial_sdk.backend import (  # noqa: E402
     ContainerBackend,
@@ -29,12 +30,18 @@ from tutorial_sdk.backend import (  # noqa: E402
     get_backend,
 )
 from tutorial_sdk.backend import docker_sdk  # noqa: E402
-from tutorial_sdk.backend.base import ContainerHandle  # noqa: E402
+from tutorial_sdk.backend.base import (  # noqa: E402
+    ContainerHandle,
+    ImageBuildResult,
+    ImagePushResult,
+)
 from tutorial_sdk.backend.docker_cli import foreground_command  # noqa: E402
 from tutorial_sdk.backend.docker_sdk import DockerSdkBackend  # noqa: E402
 from tutorial_sdk.backend.errors import (  # noqa: E402
     ContainerStartFailed,
     CopyFailed,
+    ImageBuildFailed,
+    ImagePushFailed,
 )
 from tutorial_sdk.errors import (  # noqa: E402
     BackendError,
@@ -220,17 +227,73 @@ class MockImages:
     def __init__(self):
         self.pull_calls = []
         self.pull_error = None
+        self.by_tag = {}
+        self.get_error = None
 
     def pull(self, repository, **kwargs):
         self.pull_calls.append((repository, kwargs))
         if self.pull_error is not None:
             raise self.pull_error
 
+    def add(self, tag, image_id="sha256:local", repo_digests=()):
+        self.by_tag[tag] = SimpleNamespace(
+            id=image_id, attrs={"RepoDigests": list(repo_digests)}
+        )
+
+    def get(self, name):
+        if self.get_error is not None:
+            raise self.get_error
+        try:
+            return self.by_tag[name]
+        except KeyError:
+            raise docker.errors.ImageNotFound(
+                f"No such image: {name}", explanation=f"No such image: {name}"
+            ) from None
+
+
+class MockApi:
+    """Low-level API: scripted build and push streams."""
+
+    def __init__(self):
+        self.timeout = 60
+        self.build_calls = []
+        self.build_chunks = []
+        self.build_error = None  # raised by build() itself
+        self.build_stream_error = None  # raised after the chunks
+        self.push_calls = []
+        self.push_chunks = []
+        self.push_error = None
+        self.push_stream_error = None
+        self.streams = []
+
+    def _stream(self, chunks, error):
+        def generate():
+            yield from chunks
+            if error is not None:
+                raise error
+
+        stream = MockStream(generate())
+        self.streams.append(stream)
+        return stream
+
+    def build(self, **kwargs):
+        self.build_calls.append(kwargs)
+        if self.build_error is not None:
+            raise self.build_error
+        return self._stream(self.build_chunks, self.build_stream_error)
+
+    def push(self, repository, **kwargs):
+        self.push_calls.append((repository, kwargs))
+        if self.push_error is not None:
+            raise self.push_error
+        return self._stream(self.push_chunks, self.push_stream_error)
+
 
 class MockClient:
     def __init__(self):
         self.containers = MockContainers()
         self.images = MockImages()
+        self.api = MockApi()
         self.ping_error = None
 
     def ping(self):
@@ -559,31 +622,14 @@ def test_stream_logs_closes_stream_on_early_exit(backend, client):
 
 
 # ---------------------------------------------------------------------------
-# Delegation to the CLI backend (build_image, interactive shells)
+# Delegation to the CLI backend (interactive shells)
 # ---------------------------------------------------------------------------
 
 
-def test_build_and_shell_delegate_to_cli(backend):
+def test_shell_delegates_to_cli(backend):
     cli = mock.create_autospec(DockerCliBackend, instance=True)
     cli.available.return_value = True
     backend._cli = cli
-    callback = print
-    backend.build_image(
-        Path("/p"),
-        Path("/p/Dockerfile"),
-        "t:1",
-        no_cache=True,
-        platform="linux/amd64",
-        log_callback=callback,
-    )
-    cli.build_image.assert_called_once_with(
-        Path("/p"),
-        Path("/p/Dockerfile"),
-        "t:1",
-        no_cache=True,
-        platform="linux/amd64",
-        log_callback=callback,
-    )
     backend.run_foreground("t:1", ports={8888: 9}, interactive_shell=True)
     cli.run_foreground.assert_called_once_with(
         "t:1", ports={8888: 9}, interactive_shell=True
@@ -598,16 +644,19 @@ def test_plain_foreground_run_does_not_delegate(backend, client):
     assert client.containers.create_calls == [("t:1", {})]
 
 
-def test_delegation_without_binary_is_unavailable(backend):
+def test_delegation_without_binary_is_unavailable(backend, client, tmp_path):
+    (tmp_path / "Dockerfile").write_text("FROM base\n")
+    client.images.add("t")
     with mock.patch("shutil.which", return_value=None):
-        with pytest.raises(BackendUnavailableError, match="'docker' binary"):
-            backend.build_image(Path("."), Path("Dockerfile"), "t")
         with pytest.raises(
             BackendUnavailableError, match="interactive shell runs"
         ):
             backend.run_foreground("t", interactive_shell=True)
-        # A plain foreground run needs no docker binary.
+        # Plain foreground runs, builds, and pushes need no binary.
         assert backend.run_foreground("t").returncode == 0
+        build = backend.build_image(tmp_path, tmp_path / "Dockerfile", "t")
+        assert build.image == "t"
+        assert backend.push_image("t").image == "t"
 
 
 # ---------------------------------------------------------------------------
@@ -960,7 +1009,9 @@ def test_get_backend_selects_sdk():
     with mock.patch("docker.from_env", return_value=MockClient()):
         assert isinstance(get_backend("docker-sdk"), DockerSdkBackend)
         assert isinstance(get_backend("auto"), DockerSdkBackend)
-        assert isinstance(get_backend(config="docker-sdk"), DockerSdkBackend)
+        assert isinstance(
+            get_backend(fallback_name="docker-sdk"), DockerSdkBackend
+        )
 
 
 def test_auto_falls_back_to_cli_when_daemon_unreachable(monkeypatch):
@@ -1090,3 +1141,384 @@ def test_context_host_ignores_default_and_tls(monkeypatch, tmp_path):
     assert _context_host() is None
     monkeypatch.setenv("DOCKER_CONTEXT", "does-not-exist")
     assert _context_host() is None
+
+
+# ---------------------------------------------------------------------------
+# build_image (native)
+# ---------------------------------------------------------------------------
+
+
+def dockerfile(tmp_path, text="FROM base\n"):
+    path = tmp_path / "Dockerfile"
+    path.write_text(text)
+    return path
+
+
+ERROR_CHUNK = {
+    "errorDetail": {"code": 1, "message": "returned a non-zero code: 3"},
+    "error": "returned a non-zero code: 3",
+}
+
+
+def test_build_passes_absolute_paths_and_options(
+    backend, client, tmp_path, monkeypatch
+):
+    dockerfile(tmp_path)
+    monkeypatch.chdir(tmp_path.parent)
+    context = Path(tmp_path.name)
+    client.api.build_chunks = [{"aux": {"ID": "sha256:abc"}}]
+
+    result = backend.build_image(
+        context,
+        context / "Dockerfile",
+        "t:1",
+        no_cache=True,
+        platform="linux/arm64",
+    )
+
+    assert client.api.build_calls == [
+        {
+            "path": os.path.abspath(context),
+            "dockerfile": os.path.abspath(context / "Dockerfile"),
+            "tag": "t:1",
+            "nocache": True,
+            "rm": True,
+            "forcerm": True,
+            "decode": True,
+            "platform": "linux/arm64",
+        }
+    ]
+    assert result == ImageBuildResult(
+        image="t:1", image_id="sha256:abc", logs=()
+    )
+    assert client.api.streams[0].closed
+
+
+def test_build_omits_platform_by_default(backend, client, tmp_path):
+    backend.build_image(tmp_path, dockerfile(tmp_path), "t")
+    call = client.api.build_calls[0]
+    assert "platform" not in call
+    assert call["nocache"] is False
+
+
+def test_build_streams_lines_to_callback(backend, client, tmp_path):
+    client.api.build_chunks = [
+        {"stream": "Step 1/2 : FROM base\n"},
+        {"status": "Pulling from library/base", "id": "latest"},
+        {"status": "Downloading", "progress": "[=> ]", "id": "a1"},
+        {"stream": " ---> 1f2e\nStep 2/2 : RUN ech"},
+        {"stream": "o hi\nhi\r"},
+        {"stream": "\nprogress 50%\rprogress 100%\n"},
+        {"aux": {"ID": "sha256:abc"}},
+        {"stream": "Successfully built 1f2e"},
+    ]
+    seen = []
+    result = backend.build_image(
+        tmp_path, dockerfile(tmp_path), "t", log_callback=seen.append
+    )
+    expected = [
+        "Step 1/2 : FROM base",
+        "latest: Pulling from library/base",
+        " ---> 1f2e",
+        "Step 2/2 : RUN echo hi",
+        "hi",
+        "progress 50%",
+        "progress 100%",
+        "Successfully built 1f2e",
+    ]
+    assert seen == expected
+    assert result.logs == tuple(expected)
+    assert result.image_id == "sha256:abc"
+
+
+def test_build_reads_image_id_when_not_streamed(backend, client, tmp_path):
+    client.images.add("t", image_id="sha256:fromget")
+    result = backend.build_image(tmp_path, dockerfile(tmp_path), "t")
+    assert result.image_id == "sha256:fromget"
+    # A vanished image is not an error: the ID is simply unknown.
+    other = backend.build_image(tmp_path, dockerfile(tmp_path), "gone")
+    assert other.image_id is None
+
+
+def test_build_error_carries_logs_and_output(backend, client, tmp_path):
+    client.api.build_chunks = [
+        {"stream": "Step 1/1 : RUN exit 3\n"},
+        {"stream": " ---> Running in 9a\n"},
+        ERROR_CHUNK,
+        {"stream": "never read\n"},
+    ]
+    with pytest.raises(ImageBuildFailed) as info:
+        backend.build_image(tmp_path, dockerfile(tmp_path), "t")
+    logs = ("Step 1/1 : RUN exit 3", " ---> Running in 9a")
+    assert info.value.logs == logs
+    # Like a captured ``docker build``: the output, then the error.
+    assert str(info.value) == "\n".join((*logs, ERROR_CHUNK["error"]))
+    assert client.api.streams[0].closed
+
+
+def test_build_error_with_callback_is_the_error_only(backend, client, tmp_path):
+    client.api.build_chunks = [{"stream": "Step 1/1\n"}, ERROR_CHUNK]
+    seen = []
+    with pytest.raises(ImageBuildFailed) as info:
+        backend.build_image(
+            tmp_path, dockerfile(tmp_path), "t", log_callback=seen.append
+        )
+    assert str(info.value) == ERROR_CHUNK["error"]
+    assert info.value.logs == ("Step 1/1",)
+    assert seen == ["Step 1/1"]
+
+
+def test_build_error_detail_without_error_field(backend, client, tmp_path):
+    client.api.build_chunks = [{"errorDetail": {"message": "boom"}}]
+    with pytest.raises(ImageBuildFailed, match="^boom$"):
+        backend.build_image(
+            tmp_path, dockerfile(tmp_path), "t", log_callback=print
+        )
+
+
+def test_build_request_rejected_by_daemon(backend, client, tmp_path):
+    client.api.build_error = api_error("invalid platform")
+    with pytest.raises(
+        ImageBuildFailed, match="^Error response from daemon: invalid platform$"
+    ):
+        backend.build_image(tmp_path, dockerfile(tmp_path), "t")
+
+
+def test_build_error_response_while_streaming(backend, client, tmp_path):
+    # A non-chunked error response surfaces while iterating.
+    client.api.build_chunks = [{"stream": "Sending context\n"}]
+    client.api.build_stream_error = api_error(
+        "Cannot locate specified Dockerfile: Dockerfile"
+    )
+    with pytest.raises(ImageBuildFailed) as info:
+        backend.build_image(tmp_path, dockerfile(tmp_path), "t")
+    assert str(info.value).endswith(
+        "Error response from daemon: Cannot locate specified Dockerfile: "
+        "Dockerfile"
+    )
+    assert info.value.logs == ("Sending context",)
+
+
+def test_build_unreadable_context(backend, client, tmp_path):
+    client.api.build_error = PermissionError(13, "Permission denied")
+    with pytest.raises(
+        ImageBuildFailed, match="unable to prepare context: .*denied"
+    ):
+        backend.build_image(tmp_path, dockerfile(tmp_path), "t")
+
+
+def test_build_missing_context(backend, client, tmp_path):
+    missing = tmp_path / "nope"
+    with pytest.raises(
+        ImageBuildFailed,
+        match=f'unable to prepare context: path "{missing}" not found',
+    ):
+        backend.build_image(missing, missing / "Dockerfile", "t")
+    assert client.api.build_calls == []
+
+
+@pytest.mark.parametrize("interrupt", [KeyboardInterrupt, RuntimeError])
+def test_build_interrupt_closes_stream(backend, client, tmp_path, interrupt):
+    client.api.build_chunks = [{"stream": "a\n"}, {"stream": "b\n"}]
+
+    def callback(line):
+        raise interrupt("stop")
+
+    with pytest.raises(interrupt):
+        backend.build_image(
+            tmp_path, dockerfile(tmp_path), "t", log_callback=callback
+        )
+    assert client.api.streams[0].closed
+
+
+@pytest.mark.parametrize(
+    "error",
+    [
+        requests.exceptions.ConnectionError("daemon gone"),
+        urllib3.exceptions.ProtocolError("connection broken"),
+    ],
+    ids=["requests", "urllib3"],
+)
+def test_build_daemon_lost_is_unavailable(backend, client, tmp_path, error):
+    client.api.build_stream_error = error
+    with pytest.raises(BackendUnavailableError, match="Building image failed"):
+        backend.build_image(tmp_path, dockerfile(tmp_path), "t")
+    assert client.api.streams[0].closed
+
+
+BUILDKIT_DOCKERFILE = (
+    "FROM base\nRUN --mount=type=cache,target=/root/.cache pip install x\n"
+)
+
+
+def test_buildkit_dockerfile_goes_through_cli(backend, client, tmp_path):
+    cli = mock.create_autospec(DockerCliBackend, instance=True)
+    cli.available.return_value = True
+    backend._cli = cli
+    path = dockerfile(tmp_path, BUILDKIT_DOCKERFILE)
+    backend.build_image(
+        tmp_path,
+        path,
+        "t:1",
+        no_cache=True,
+        platform="linux/amd64",
+        log_callback=print,
+    )
+    cli.build_image.assert_called_once_with(
+        tmp_path,
+        path,
+        "t:1",
+        no_cache=True,
+        platform="linux/amd64",
+        log_callback=print,
+    )
+    assert client.api.build_calls == []
+
+
+def test_buildkit_dockerfile_builds_natively_without_cli(
+    backend, client, tmp_path
+):
+    with mock.patch("shutil.which", return_value=None):
+        backend.build_image(
+            tmp_path, dockerfile(tmp_path, BUILDKIT_DOCKERFILE), "t"
+        )
+    assert len(client.api.build_calls) == 1
+
+
+def test_plain_dockerfile_never_uses_cli(backend, client, tmp_path):
+    cli = mock.create_autospec(DockerCliBackend, instance=True)
+    cli.available.return_value = True
+    backend._cli = cli
+    backend.build_image(tmp_path, dockerfile(tmp_path), "t")
+    cli.build_image.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# push_image (native)
+# ---------------------------------------------------------------------------
+
+
+PUSH_CHUNKS = [
+    {"status": "The push refers to repository [reg:5000/org/x]"},
+    {"status": "Preparing", "progressDetail": {}, "id": "a1"},
+    {
+        "status": "Pushing",
+        "progressDetail": {"current": 1, "total": 2},
+        "progress": "[=>  ]",
+        "id": "a1",
+    },
+    {"status": "Pushed", "progressDetail": {}, "id": "a1"},
+    {"status": "1.0: digest: sha256:d1 size: 528"},
+    {"progressDetail": {}, "aux": {"Tag": "1.0", "Digest": "sha256:d1"}},
+]
+
+
+def test_push_streams_status_and_reads_digest(backend, client):
+    client.api.push_chunks = PUSH_CHUNKS
+    client.images.add(
+        "reg:5000/org/x:1.0",
+        repo_digests=["reg:5000/org/x@sha256:d1", "other/x@sha256:d2"],
+    )
+    seen = []
+    result = backend.push_image("reg:5000/org/x:1.0", log_callback=seen.append)
+
+    assert client.api.push_calls == [
+        ("reg:5000/org/x", {"tag": "1.0", "stream": True, "decode": True})
+    ]
+    assert seen == [
+        "The push refers to repository [reg:5000/org/x]",
+        "a1: Preparing",
+        "a1: Pushed",
+        "1.0: digest: sha256:d1 size: 528",
+    ]
+    assert result == ImagePushResult(
+        image="reg:5000/org/x:1.0", digest="sha256:d1"
+    )
+    assert client.api.streams[0].closed
+
+
+def test_push_streams_empty_or_none_status(backend, client):
+    client.api.push_chunks = [
+        {"status": None},
+        {"status": ""},
+        {"id": "layer1", "status": None},
+    ]
+    seen = []
+    backend.push_image("demo:1", log_callback=seen.append)
+    assert seen == ["", "", "layer1: "]
+
+
+@pytest.mark.parametrize(
+    ("tag", "repository"),
+    [("demo", "demo"), ("localhost:5000/demo", "localhost:5000/demo")],
+)
+def test_push_without_version_pushes_latest(backend, client, tag, repository):
+    backend.push_image(tag)
+    assert client.api.push_calls[0][0] == repository
+    assert client.api.push_calls[0][1]["tag"] == "latest"
+
+
+@pytest.mark.parametrize(
+    "digests",
+    [None, [], ["no-at-sign"]],
+    ids=["image-gone", "no-digests", "malformed"],
+)
+def test_push_digest_unavailable(backend, client, digests):
+    if digests is not None:
+        client.images.add("demo:1", repo_digests=digests)
+    assert backend.push_image("demo:1").digest is None
+
+
+def test_push_registry_error_chunk(backend, client):
+    client.api.push_chunks = [
+        PUSH_CHUNKS[0],
+        {
+            "errorDetail": {"message": "denied: requested access"},
+            "error": "denied: requested access",
+        },
+    ]
+    with pytest.raises(ImagePushFailed, match="^denied: requested access$"):
+        backend.push_image("demo:1")
+    assert client.api.streams[0].closed
+
+
+def test_push_rejected_by_daemon(backend, client):
+    client.api.push_error = docker.errors.ImageNotFound(
+        "404", explanation="No such image: demo:1"
+    )
+    with pytest.raises(
+        ImagePushFailed, match="^Error response from daemon: No such image"
+    ):
+        backend.push_image("demo:1")
+
+
+def test_push_read_timeout(backend, client):
+    client.api.push_stream_error = urllib3.exceptions.ReadTimeoutError(
+        None, None, "Read timed out."
+    )
+    with pytest.raises(
+        ImagePushFailed, match="No progress from the Docker daemon"
+    ):
+        backend.push_image("demo:1")
+    assert client.api.streams[0].closed
+
+
+def test_push_daemon_lost_is_unavailable(backend, client):
+    client.api.push_error = requests.exceptions.ConnectionError("gone")
+    with pytest.raises(BackendUnavailableError, match="Pushing image failed"):
+        backend.push_image("demo:1")
+
+
+def test_stream_logs_urllib3_errors_are_unavailable(backend, client):
+    c = running(client)
+    c.log_chunks = [b"a\n"]
+    stream = backend.stream_logs(handle())
+    assert next(stream) == "a"
+
+    def broken():
+        raise urllib3.exceptions.ProtocolError("connection broken")
+        yield  # pragma: no cover
+
+    c.stream._chunks = broken()
+    with pytest.raises(BackendUnavailableError):
+        next(stream)

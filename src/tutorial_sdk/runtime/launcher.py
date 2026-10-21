@@ -23,16 +23,18 @@ class RuntimeLauncher:
         self,
         spec: TutorialSpec,
         root: str | Path = ".",
-        backend: ContainerBackend | None = None,
+        backend: ContainerBackend | str | None = None,
     ) -> None:
         """Create a runtime launcher.
 
         Args:
             spec: Parsed tutorial specification.
             root: Tutorial project root directory.
-            backend: Optional container backend override.
-                Defaults to auto-detection via
-                :func:`tutorial_sdk.backend.get_backend`.
+            backend: Container backend instance, or a backend name
+                (``"auto"``, ``"docker-cli"``, ``"docker-sdk"``)
+                taking precedence over ``TUTORIAL_SDK_BACKEND`` and
+                ``build.backend``.  Defaults to that selection
+                (see :func:`tutorial_sdk.backend.get_backend`).
         """
 
         self.spec = spec
@@ -59,12 +61,14 @@ class RuntimeLauncher:
         Raises:
             BackendUnavailableError: If no container backend
                 is available.
-            ConfigError: If ``TUTORIAL_SDK_BACKEND`` names an
-                unknown backend.
+            ConfigError: If the selected backend name is
+                unknown.
         """
 
         image = image or self.spec.build.image or f"{self.spec.name}:latest"
-        backend = self.backend or get_backend()
+        backend = get_backend(
+            self.backend, fallback_name=self.spec.build.backend
+        )
 
         exit_info = backend.run_foreground(
             image,

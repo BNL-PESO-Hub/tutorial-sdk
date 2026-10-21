@@ -23,16 +23,18 @@ class ContainerValidator:
         self,
         spec: TutorialSpec,
         root: str | Path = ".",
-        backend: ContainerBackend | None = None,
+        backend: ContainerBackend | str | None = None,
     ) -> None:
         """Create a container validator.
 
         Args:
             spec: Parsed tutorial specification.
             root: Tutorial project root directory.
-            backend: Optional container backend override.
-                Defaults to auto-detection via
-                :func:`tutorial_sdk.backend.get_backend`.
+            backend: Container backend instance, or a backend name
+                (``"auto"``, ``"docker-cli"``, ``"docker-sdk"``)
+                taking precedence over ``TUTORIAL_SDK_BACKEND`` and
+                ``build.backend``.  Defaults to that selection
+                (see :func:`tutorial_sdk.backend.get_backend`).
         """
 
         self.spec = spec
@@ -53,8 +55,8 @@ class ContainerValidator:
         Raises:
             ValidationError: If no container backend is
                 available (e.g. Docker is not installed).
-            ConfigError: If ``TUTORIAL_SDK_BACKEND`` names an
-                unknown backend.
+            ConfigError: If the selected backend name is
+                unknown.
         """
 
         image_name = (
@@ -63,7 +65,9 @@ class ContainerValidator:
         container_name = f"tutorial-sdk-val-{self.spec.name}"
 
         try:
-            backend = self.backend or get_backend()
+            backend = get_backend(
+                self.backend, fallback_name=self.spec.build.backend
+            )
         except BackendUnavailableError as exc:
             raise ValidationError(
                 "Docker is not installed or not on PATH."
@@ -127,9 +131,7 @@ class ContainerValidator:
 
             # 2. Check if JupyterLab executable is available
             # inside the container.
-            exec_res = backend.exec(
-                handle, ["jupyter", "lab", "--version"]
-            )
+            exec_res = backend.exec(handle, ["jupyter", "lab", "--version"])
 
             if exec_res.exit_code == 0:
                 checks.append(

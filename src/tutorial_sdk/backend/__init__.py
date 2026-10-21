@@ -1,15 +1,17 @@
 """Container backend selection.
 
 Exposes :func:`get_backend`, the single entry point through which
-``DockerBuilder``, ``ContainerValidator``, and ``RuntimeLauncher``
-obtain a container execution backend.
+``DockerBuilder``, ``ContainerValidator``, ``RuntimeLauncher``, and
+the ``ci`` command obtain a container execution backend.  It accepts
+either a backend name or a ready backend instance, which is returned
+unchanged.
 
 Selection precedence (highest first):
 
-1. Explicit ``preference`` argument (e.g. from a ``--backend``
+1. Explicit ``backend`` argument (e.g. from a ``--backend``
    CLI flag).
 2. The ``TUTORIAL_SDK_BACKEND`` environment variable.
-3. The ``config`` argument (e.g. ``build.backend`` from
+3. The ``fallback_name`` argument (e.g. ``build.backend`` from
    ``tutorial.yml``).
 4. Auto-detection: prefer the docker-py backend when it can be
    loaded, otherwise fall back to the Docker CLI backend.
@@ -24,6 +26,7 @@ never imports ``docker_sdk`` (or the optional ``docker`` package).
 from __future__ import annotations
 
 import os
+from typing import Literal, get_args
 
 from ..errors import BackendError, BackendUnavailableError, ConfigError
 from .base import (
@@ -31,14 +34,22 @@ from .base import (
     ContainerHandle,
     ExecResult,
     ImageBuildResult,
+    ImagePushResult,
     LogCallback,
     RunExit,
 )
 from .docker_cli import DockerCliBackend
-from .errors import ContainerStartFailed, CopyFailed, ImageBuildFailed
+from .errors import (
+    ContainerStartFailed,
+    CopyFailed,
+    ImageBuildFailed,
+    ImagePushFailed,
+)
 
 __all__ = [
+    "BACKEND_CHOICES",
     "BackendError",
+    "BackendName",
     "BackendUnavailableError",
     "ContainerBackend",
     "ContainerHandle",
@@ -49,13 +60,19 @@ __all__ = [
     "ExecResult",
     "ImageBuildFailed",
     "ImageBuildResult",
+    "ImagePushFailed",
+    "ImagePushResult",
     "LogCallback",
     "RunExit",
     "get_backend",
 ]
 
 _ENV_VAR = "TUTORIAL_SDK_BACKEND"
-_CHOICES = ("auto", "docker-cli", "docker-sdk")
+
+#: Accepted backend names, for ``--backend``, ``TUTORIAL_SDK_BACKEND``,
+#: and ``build.backend``.
+BackendName = Literal["auto", "docker-cli", "docker-sdk"]
+BACKEND_CHOICES: tuple[str, ...] = get_args(BackendName)
 _SDK_MODULE = f"{__name__}.docker_sdk"
 
 
@@ -105,34 +122,38 @@ def _sdk_package_missing(exc: ImportError) -> BackendUnavailableError:
 
 
 def _resolve_preference(
-    preference: str | None,
-    config: str | None,
+    name: str | None,
+    fallback_name: str | None,
 ) -> str:
     """Apply the selection precedence and validate the result."""
-    for candidate in (preference, os.environ.get(_ENV_VAR), config):
+    for candidate in (name, os.environ.get(_ENV_VAR), fallback_name):
         if candidate and candidate != "auto":
-            if candidate not in _CHOICES:
+            if candidate not in BACKEND_CHOICES:
                 raise ConfigError(
                     f"Unknown container backend {candidate!r}; "
-                    f"expected one of {', '.join(_CHOICES)}."
+                    f"expected one of {', '.join(BACKEND_CHOICES)}."
                 )
             return candidate
     return "auto"
 
 
 def get_backend(
-    preference: str | None = None,
+    backend: ContainerBackend | str | None = None,
     *,
-    config: str | None = None,
+    fallback_name: str | None = None,
 ) -> ContainerBackend:
     """Return a container backend matching the selection precedence.
 
     Args:
-        preference: Explicit choice, typically from a CLI flag:
-            ``"auto"``, ``"docker-cli"``, or ``"docker-sdk"``.
-        config: Choice from project configuration (e.g.
-            ``build.backend``).  Consulted only when neither
-            ``preference`` nor ``TUTORIAL_SDK_BACKEND`` names a
+        backend: Explicit choice, typically from a CLI flag or a
+            consumer's ``backend`` argument: ``"auto"``,
+            ``"docker-cli"``, ``"docker-sdk"``, or a ready
+            ``ContainerBackend`` instance.  An instance is the most
+            explicit choice and is returned unchanged, bypassing
+            ``TUTORIAL_SDK_BACKEND`` and ``fallback_name``.
+        fallback_name: Backend name from project configuration
+            (e.g. ``build.backend``).  Consulted only when neither
+            ``backend`` nor ``TUTORIAL_SDK_BACKEND`` names a
             backend.
 
     Returns:
@@ -143,7 +164,10 @@ def get_backend(
         BackendUnavailableError: If no usable backend exists in
             this environment.
     """
-    pref = _resolve_preference(preference, config)
+    if isinstance(backend, ContainerBackend):
+        return backend
+
+    pref = _resolve_preference(backend, fallback_name)
 
     if pref == "docker-sdk":
         return _load_sdk_backend()

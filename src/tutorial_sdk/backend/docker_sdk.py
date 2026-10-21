@@ -6,17 +6,23 @@ the optional ``docker`` package (``pip install
 ``DockerSdkBackend.__init__`` so that importing this module never
 requires it.
 
-The container runtime surface (``run_detached``, ``is_running``,
+Image builds and pushes (``build_image``, ``push_image``), the
+container runtime surface (``run_detached``, ``is_running``,
 ``wait_running``, ``logs``, ``exec``, ``remove``), foreground runs
 (``run_foreground``), and ``copy_in`` / ``stream_logs`` are
-implemented natively via docker-py.  ``build_image`` and interactive
-shell runs (``run_foreground(..., interactive_shell=True)``) delegate
-to an internal ``DockerCliBackend``: the CLI's build output is what
-users expect, and docker-py has no terminal attach.
+implemented natively via docker-py.  Two cases go through an internal
+``DockerCliBackend`` instead:
 
-All ``docker.errors.*`` and ``requests`` exceptions are translated
-into the backend error hierarchy here; nothing above this module
-ever sees a docker-py type.
+* interactive shell runs (``run_foreground(..., interactive_shell=True)``),
+  because docker-py has no terminal attach;
+* builds of Dockerfiles that need BuildKit (see
+  :func:`requires_buildkit`), because the Engine API build endpoint
+  that docker-py uses runs the classic builder.  When the ``docker``
+  binary is missing, such builds are still attempted natively.
+
+All ``docker.errors.*``, ``requests``, and ``urllib3`` exceptions are
+translated into the backend error hierarchy here; nothing above this
+module ever sees a docker-py type.
 """
 
 from __future__ import annotations
@@ -24,6 +30,7 @@ from __future__ import annotations
 import codecs
 import io
 import os
+import re
 import signal
 import sys
 import tarfile
@@ -38,12 +45,18 @@ from .base import (
     ContainerHandle,
     ExecResult,
     ImageBuildResult,
+    ImagePushResult,
     LogCallback,
     RunExit,
     observe_running,
 )
 from .docker_cli import DockerCliBackend, foreground_command
-from .errors import ContainerStartFailed, CopyFailed
+from .errors import (
+    ContainerStartFailed,
+    CopyFailed,
+    ImageBuildFailed,
+    ImagePushFailed,
+)
 
 if TYPE_CHECKING:
     from docker import DockerClient
@@ -71,6 +84,150 @@ _POLL_INTERVAL = 0.1
 
 #: Signals forwarded to a foreground container, like ``docker run``.
 _FORWARDED_SIGNALS = (signal.SIGINT, signal.SIGTERM)
+
+#: ``RUN``/``COPY``/``ADD`` flags that only BuildKit understands.
+_BUILDKIT_FLAGS = frozenset(
+    {
+        "checksum",
+        "chmod",
+        "exclude",
+        "keep-git-dir",
+        "link",
+        "mount",
+        "network",
+        "parents",
+        "secret",
+        "security",
+        "ssh",
+        "unpack",
+    }
+)
+
+#: Parser directives (``# syntax=...``, ``# check=...``).
+_BUILDKIT_DIRECTIVE = re.compile(r"#\s*(?:syntax|check)\s*=", re.IGNORECASE)
+
+#: Heredoc opening (``<<EOF``, ``<<-"EOF"``) in ``RUN``/``COPY``/``ADD``.
+_HEREDOC = re.compile(r"<<-?\s*[\"']?[A-Za-z_][A-Za-z0-9_]*")
+
+#: Automatic platform build arguments defined only by BuildKit.
+_BUILDKIT_ARGS = re.compile(
+    r"\$\{?(?:BUILD|TARGET)(?:PLATFORM|OS|ARCH|VARIANT)\b"
+)
+
+_LINE_BREAK = re.compile(r"\r\n|\r|\n")
+
+
+def requires_buildkit(dockerfile: str) -> bool:
+    """Return ``True`` if a Dockerfile uses BuildKit-only features.
+
+    docker-py builds through the Engine API's classic builder, which
+    rejects or misreads parser directives (``# syntax=``,
+    ``# check=``), BuildKit-only ``RUN``/``COPY``/``ADD`` flags
+    (``--mount``, ``--link``, ``--chmod``, ...), heredocs, and the
+    automatic platform arguments (``$BUILDPLATFORM``,
+    ``$TARGETARCH``, ...).  The check is deliberately conservative:
+    a false positive only routes the build through the Docker CLI.
+
+    Args:
+        dockerfile: Dockerfile text.
+
+    Returns:
+        Whether the Dockerfile needs BuildKit.
+    """
+    raw_lines = dockerfile.splitlines()
+
+    # Parser directives may only appear before anything else.
+    for line in raw_lines:
+        stripped = line.strip()
+        if not stripped.startswith("#"):
+            break
+        if _BUILDKIT_DIRECTIVE.match(stripped):
+            return True
+
+    non_comment = "\n".join(
+        line for line in raw_lines if not line.lstrip().startswith("#")
+    )
+    lines = non_comment.replace("\\\r\n", " ").replace("\\\n", " ").splitlines()
+
+    for line in lines:
+        words = line.split()
+        if not words:
+            continue
+        if words[0].upper() in {"RUN", "COPY", "ADD"}:
+            for word in words[1:]:
+                if not word.startswith("--"):
+                    break
+                flag = word[2:].split("=", 1)[0].lower()
+                if flag in _BUILDKIT_FLAGS:
+                    return True
+            if _HEREDOC.search(line):
+                return True
+        if _BUILDKIT_ARGS.search(line):
+            return True
+    return False
+
+
+class _LineCollector:
+    """Turn streamed build/push output into lines.
+
+    Lines are collected for results and error reports and, when a
+    callback is given, forwarded to it as they complete.  As in the
+    Docker CLI's text output, carriage returns, line feeds, and CRLF
+    pairs all end a line.
+    """
+
+    def __init__(self, callback: LogCallback | None) -> None:
+        self.lines: list[str] = []
+        self._callback = callback
+        self._pending = ""
+
+    def feed(self, text: str) -> None:
+        """Add raw output text, emitting every completed line."""
+        buffer = self._pending + text
+        # Keep a trailing CR: it may be the first half of a CRLF.
+        held = "\r" if buffer.endswith("\r") else ""
+        if held:
+            buffer = buffer[:-1]
+        *complete, rest = _LINE_BREAK.split(buffer)
+        self._pending = rest + held
+        for line in complete:
+            self._emit(line)
+
+    def status(self, chunk: dict[str, Any]) -> None:
+        """Emit a status message, skipping progress-bar updates."""
+        if chunk.get("progress"):
+            return
+        status = str(chunk.get("status") or "")
+        ident = chunk.get("id")
+        self.flush()
+        self._emit(f"{ident}: {status}" if ident else status)
+
+    def flush(self) -> None:
+        """Emit any incomplete trailing line."""
+        rest, self._pending = self._pending.rstrip("\r"), ""
+        if rest:
+            self._emit(rest)
+
+    def _emit(self, line: str) -> None:
+        self.lines.append(line)
+        if self._callback is not None:
+            self._callback(line)
+
+
+def _stream_error(chunk: dict[str, Any]) -> str | None:
+    """Return the error message of a build/push stream chunk, if any."""
+    if "error" not in chunk and "errorDetail" not in chunk:
+        return None
+    detail = chunk.get("errorDetail") or {}
+    message = chunk.get("error") or detail.get("message")
+    return str(message).strip() if message else "unknown error"
+
+
+def _close(stream: Any) -> None:
+    """Close a docker-py response stream, if it can be closed."""
+    close = getattr(stream, "close", None)
+    if close is not None:
+        close()
 
 
 def _daemon_message(exc: Exception) -> str:
@@ -287,9 +444,20 @@ class DockerSdkBackend:
         """
         import docker
         import requests
+        import urllib3
 
         self._errors = docker.errors
-        self._request_error = requests.exceptions.RequestException
+        # Streamed responses are read through urllib3 directly, so its
+        # errors can surface without a ``requests`` wrapper.
+        self._request_error = (
+            requests.exceptions.RequestException,
+            urllib3.exceptions.HTTPError,
+        )
+        self._read_timeout = (
+            requests.exceptions.ReadTimeout,
+            urllib3.exceptions.ReadTimeoutError,
+        )
+        self._parse_repository_tag = docker.utils.parse_repository_tag
         self._cli = DockerCliBackend()
 
         if client is not None:
@@ -298,7 +466,7 @@ class DockerSdkBackend:
         try:
             self._client = _connect(docker)
             self._client.ping()
-        except (docker.errors.DockerException, self._request_error) as exc:
+        except (docker.errors.DockerException, *self._request_error) as exc:
             raise BackendUnavailableError(
                 f"Cannot connect to the Docker daemon via docker-py: "
                 f"{exc}. Check that Docker is running (and DOCKER_HOST "
@@ -351,10 +519,10 @@ class DockerSdkBackend:
         """Return ``True`` if the Docker daemon answers a ping."""
         try:
             return bool(self._client.ping())
-        except (self._errors.DockerException, self._request_error):
+        except (self._errors.DockerException, *self._request_error):
             return False
 
-    # -- delegated to the CLI backend ----------------------------------------
+    # -- images --------------------------------------------------------------
 
     def build_image(
         self,
@@ -366,15 +534,180 @@ class DockerSdkBackend:
         platform: str | None = None,
         log_callback: LogCallback | None = None,
     ) -> ImageBuildResult:
-        """Build an image (delegated to ``DockerCliBackend``)."""
-        return self._delegate("image builds").build_image(
-            context,
-            dockerfile,
-            tag,
-            no_cache=no_cache,
-            platform=platform,
-            log_callback=log_callback,
-        )
+        """Build an image through the Engine API.
+
+        The build output is split into lines, collected in the result,
+        and forwarded to ``log_callback`` as it arrives.  The image ID
+        (``sha256:...``) is reported in ``ImageBuildResult.image_id``.
+
+        A failed build raises ``ImageBuildFailed`` carrying the
+        collected lines.  Its message is the builder's error; without
+        a ``log_callback`` the build output precedes it, as in the
+        message of a captured ``docker build``.
+
+        Dockerfiles that need BuildKit (:func:`requires_buildkit`) are
+        built by ``DockerCliBackend`` when the ``docker`` binary is on
+        PATH, since the Engine API endpoint runs the classic builder.
+
+        Raises:
+            ImageBuildFailed: If the build fails.
+            BackendUnavailableError: If the daemon is unreachable.
+            BackendError: For other unexpected daemon errors.
+        """
+        if self._needs_cli_build(dockerfile):
+            return self._cli.build_image(
+                context,
+                dockerfile,
+                tag,
+                no_cache=no_cache,
+                platform=platform,
+                log_callback=log_callback,
+            )
+
+        if not Path(context).is_dir():
+            raise ImageBuildFailed(
+                f'unable to prepare context: path "{context}" not found'
+            )
+        options: dict[str, Any] = {
+            # Absolute paths: docker-py resolves a relative Dockerfile
+            # against the context, the CLI against the working dir.
+            "path": os.path.abspath(context),
+            "dockerfile": os.path.abspath(dockerfile),
+            "tag": tag,
+            "nocache": no_cache,
+            # Remove intermediate containers even when a step fails,
+            # as BuildKit (the CLI's builder) leaves none behind.
+            "rm": True,
+            "forcerm": True,
+            "decode": True,
+        }
+        if platform:
+            options["platform"] = platform
+
+        output = _LineCollector(log_callback)
+        error: str | None = None
+        image_id: str | None = None
+        with self._guard("Building image"):
+            try:
+                stream = self._client.api.build(**options)
+            except self._errors.APIError as exc:
+                raise ImageBuildFailed(_daemon_message(exc)) from exc
+            except OSError as exc:  # unreadable context or Dockerfile
+                raise ImageBuildFailed(
+                    f"unable to prepare context: {exc}"
+                ) from exc
+            try:
+                for chunk in stream:
+                    error = _stream_error(chunk)
+                    if error is not None:
+                        break
+                    if "stream" in chunk:
+                        output.feed(str(chunk["stream"]))
+                    elif "status" in chunk:
+                        output.status(chunk)
+                    aux = chunk.get("aux")
+                    if isinstance(aux, dict) and aux.get("ID"):
+                        image_id = str(aux["ID"])
+            except self._errors.APIError as exc:
+                # The daemon rejected the request (e.g. a missing
+                # Dockerfile or an unknown platform).
+                error = _daemon_message(exc)
+            finally:
+                # Also on interrupts: closing the stream drops the
+                # connection, which cancels the build on the daemon.
+                _close(stream)
+            output.flush()
+            if error is None and image_id is None:
+                image_id = self._image_id(tag)
+
+        logs = tuple(output.lines)
+        if error is not None:
+            message = error if log_callback else "\n".join((*logs, error))
+            raise ImageBuildFailed(message, logs=logs)
+        return ImageBuildResult(image=tag, image_id=image_id, logs=logs)
+
+    def _needs_cli_build(self, dockerfile: str | Path) -> bool:
+        """Return ``True`` if a build should go through the Docker CLI."""
+        try:
+            text = Path(dockerfile).read_text(errors="replace")
+        except OSError:
+            return False  # reported by the native build
+        return requires_buildkit(text) and self._cli.available()
+
+    def _image_id(self, tag: str) -> str | None:
+        """Return the ID of the local image ``tag``, if it exists."""
+        try:
+            return self._client.images.get(tag).id
+        except self._errors.NotFound:
+            return None
+
+    def push_image(
+        self,
+        tag: str,
+        *,
+        log_callback: LogCallback | None = None,
+    ) -> ImagePushResult:
+        """Push an image through the Engine API.
+
+        Credentials come from the Docker configuration (including
+        credential helpers), as for ``docker push``.  Status lines
+        (one per layer and step, without progress-bar updates) are
+        forwarded to ``log_callback``.  The digest is then read from
+        the image's first repository digest, as the CLI backend does.
+
+        Raises:
+            ImagePushFailed: If the daemon or the registry rejects the
+                push, or the daemon reports no progress within the
+                client timeout.
+            BackendUnavailableError: If the daemon is unreachable.
+            BackendError: For other unexpected daemon errors.
+        """
+        repository, version = self._parse_repository_tag(tag)
+        output = _LineCollector(log_callback)
+        error: str | None = None
+        with self._guard("Pushing image"):
+            try:
+                stream = self._client.api.push(
+                    repository,
+                    tag=version or "latest",
+                    stream=True,
+                    decode=True,
+                )
+                try:
+                    for chunk in stream:
+                        error = _stream_error(chunk)
+                        if error is not None:
+                            break
+                        if "status" in chunk:
+                            output.status(chunk)
+                finally:
+                    _close(stream)
+            except self._errors.APIError as exc:
+                raise ImagePushFailed(_daemon_message(exc)) from exc
+            except self._read_timeout as exc:
+                raise ImagePushFailed(
+                    f"No progress from the Docker daemon while pushing "
+                    f"{tag}: {exc}"
+                ) from exc
+        if error is not None:
+            raise ImagePushFailed(error)
+        return ImagePushResult(image=tag, digest=self._repo_digest(tag))
+
+    def _repo_digest(self, tag: str) -> str | None:
+        """Return the digest of the image's first repository digest.
+
+        Mirrors the CLI backend's ``docker inspect --format
+        '{{index .RepoDigests 0}}'``: any lookup failure gives ``None``.
+        """
+        with self._guard("Inspecting image"):
+            try:
+                attrs = self._client.images.get(tag).attrs
+            except self._errors.APIError:
+                return None
+        digests = attrs.get("RepoDigests") or []
+        if not digests or "@" not in digests[0]:
+            return None
+        return str(digests[0]).split("@", 1)[1]
 
     # -- foreground runs -----------------------------------------------------
 

@@ -7,13 +7,17 @@ historical public behavior (messages, check names, cleanup).
 """
 
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
+from tutorial_sdk.backend import get_backend
 from tutorial_sdk.backend.base import ExecResult
 from tutorial_sdk.builder.docker import BuildResult, DockerBuilder
 from tutorial_sdk.errors import BuildError
+from tutorial_sdk.project import TutorialProject
 from tutorial_sdk.runtime.launcher import RuntimeLauncher
+from tutorial_sdk.spec import TutorialSpec
 from tutorial_sdk.validator.container import ContainerValidator
 
 from .mock_backend import MockBackend, make_spec
@@ -37,9 +41,9 @@ def test_build_defaults_to_name_latest_tag():
 
     call = backend.calls[0]
     assert call[0] == "build_image"
-    assert call[1] == Path("/proj")            # context
+    assert call[1] == Path("/proj")  # context
     assert call[2] == Path("/proj/Dockerfile")  # dockerfile
-    assert call[3] == "demo:latest"             # tag
+    assert call[3] == "demo:latest"  # tag
 
 
 def test_build_uses_spec_image_and_explicit_override():
@@ -57,7 +61,7 @@ def test_build_cache_resolution():
 
     backend = MockBackend()
     DockerBuilder(spec_cached, backend=backend).build()
-    assert backend.calls[-1][4] is False        # no_cache
+    assert backend.calls[-1][4] is False  # no_cache
 
     backend = MockBackend()
     DockerBuilder(spec_uncached, backend=backend).build()
@@ -75,9 +79,7 @@ def test_build_cache_resolution():
 
 def test_build_passes_platform():
     backend = MockBackend()
-    DockerBuilder(make_spec(), backend=backend).build(
-        platform="linux/amd64"
-    )
+    DockerBuilder(make_spec(), backend=backend).build(platform="linux/amd64")
     assert backend.calls[-1][5] == "linux/amd64"
 
 
@@ -94,8 +96,9 @@ def test_build_failure_raises_public_build_error():
 
 def test_validate_happy_path():
     backend = MockBackend(exec_result=ExecResult(0, "4.2.0"))
-    report = ContainerValidator(make_spec(name="demo"),
-                                backend=backend).validate()
+    report = ContainerValidator(
+        make_spec(name="demo"), backend=backend
+    ).validate()
 
     assert report.passed is True
     assert [c.name for c in report.checks] == [
@@ -177,8 +180,9 @@ def test_validate_cleans_up_when_exec_raises():
 
 def test_validate_image_override():
     backend = MockBackend()
-    ContainerValidator(make_spec(image="cfg:1"),
-                       backend=backend).validate(image="cli:2")
+    ContainerValidator(make_spec(image="cfg:1"), backend=backend).validate(
+        image="cli:2"
+    )
     assert backend.calls[0][1] == "cli:2"
 
 
@@ -213,3 +217,136 @@ def test_run_propagates_exit_code():
     backend = MockBackend(run_returncode=130)
     result = RuntimeLauncher(make_spec(), backend=backend).run()
     assert result.returncode == 130
+
+
+# ---------------------------------------------------------------------------
+# Backend selection by name (--backend / build.backend)
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def selections(monkeypatch):
+    """Record ``get_backend`` calls made by the backend consumers."""
+    calls = []
+    selected = MockBackend()
+
+    def mock_get_backend(backend=None, *, fallback_name=None):
+        calls.append((backend, fallback_name))
+        return selected
+
+    for consumer in (
+        "builder.docker",
+        "validator.container",
+        "runtime.launcher",
+    ):
+        monkeypatch.setattr(
+            f"tutorial_sdk.{consumer}.get_backend", mock_get_backend
+        )
+    return SimpleNamespace(calls=calls, backend=selected)
+
+
+@pytest.mark.parametrize("preference", [None, "auto", "docker-cli"])
+def test_consumers_pass_name_and_spec_config(selections, preference):
+    spec = make_spec(backend="docker-sdk")
+    DockerBuilder(spec, backend=preference).build()
+    ContainerValidator(spec, backend=preference).validate()
+    RuntimeLauncher(spec, backend=preference).run()
+    assert selections.calls == [(preference, "docker-sdk")] * 3
+    assert selections.backend.names() == [
+        "build_image",
+        "run_detached",
+        "wait_running",
+        "exec",
+        "remove",
+        "run_foreground",
+    ]
+
+
+def test_backend_instances_bypass_selection(monkeypatch):
+    monkeypatch.setenv("TUTORIAL_SDK_BACKEND", "docker-sdk")
+    backend = MockBackend()
+    DockerBuilder(make_spec(backend="docker-cli"), backend=backend).build()
+    assert backend.names() == ["build_image"]
+
+
+def test_get_backend_returns_instance_unchanged(monkeypatch):
+    monkeypatch.setenv("TUTORIAL_SDK_BACKEND", "docker-sdk")
+    instance = MockBackend()
+    assert get_backend(instance, fallback_name="docker-cli") is instance
+
+
+def test_unavailable_named_backend_is_a_build_error(monkeypatch):
+    def missing_binary(*args, **kwargs):
+        raise FileNotFoundError("docker")
+
+    monkeypatch.setattr("subprocess.run", missing_binary)
+    with pytest.raises(BuildError, match="not installed or not on PATH"):
+        DockerBuilder(make_spec(), backend="docker-cli").build()
+
+
+def _project(tmp_path, backend=None):
+    build = {"backend": backend} if backend else {}
+    spec = TutorialSpec.model_validate({"name": "demo", "build": build})
+    return TutorialProject(spec, tmp_path, tmp_path / "tutorial.yml")
+
+
+def test_project_methods_forward_backend(tmp_path):
+    backend = MockBackend()
+    project = _project(tmp_path)
+    assert project.build(backend=backend).image == "demo:latest"
+    report = project.validate(container=True, backend=backend)
+    assert [c.name for c in report.checks][-2:] == [
+        "container.start",
+        "container.jupyterlab",
+    ]
+    assert project.run(port=9000, backend=backend).returncode == 0
+    assert backend.names() == [
+        "build_image",
+        "run_detached",
+        "wait_running",
+        "exec",
+        "remove",
+        "run_foreground",
+    ]
+    # The project build generated its Dockerfile first.
+    assert (tmp_path / "Dockerfile").exists()
+
+
+@pytest.mark.parametrize(
+    ("flag", "env", "config", "expected"),
+    [
+        (None, None, "docker-cli", "docker-cli"),
+        (None, None, None, "docker-sdk"),  # auto prefers docker-py
+        (None, "docker-sdk", "docker-cli", "docker-sdk"),
+        ("docker-cli", "docker-sdk", "docker-sdk", "docker-cli"),
+        ("auto", "docker-cli", "docker-sdk", "docker-cli"),
+        ("auto", None, "docker-cli", "docker-cli"),
+    ],
+)
+def test_selection_precedence_end_to_end(
+    tmp_path, monkeypatch, flag, env, config, expected
+):
+    """``--backend`` > ``TUTORIAL_SDK_BACKEND`` > ``build.backend``."""
+    import tutorial_sdk.backend as backend_pkg
+
+    chosen = []
+
+    class Named(MockBackend):
+        def __init__(self, name):
+            super().__init__()
+            self.name = name
+
+        def build_image(self, *args, **kwargs):
+            chosen.append(self.name)
+            return super().build_image(*args, **kwargs)
+
+    monkeypatch.setattr(
+        backend_pkg, "_load_sdk_backend", lambda: Named("docker-sdk")
+    )
+    monkeypatch.setattr(
+        backend_pkg, "DockerCliBackend", lambda: Named("docker-cli")
+    )
+    if env:
+        monkeypatch.setenv("TUTORIAL_SDK_BACKEND", env)
+    _project(tmp_path, config).build(backend=flag)
+    assert chosen == [expected]

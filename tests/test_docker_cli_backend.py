@@ -14,11 +14,12 @@ from unittest import mock
 import pytest
 
 from tutorial_sdk.backend import DockerCliBackend, get_backend
-from tutorial_sdk.backend.base import ContainerHandle
+from tutorial_sdk.backend.base import ContainerHandle, ImagePushResult
 from tutorial_sdk.backend.errors import (
     ContainerStartFailed,
     CopyFailed,
     ImageBuildFailed,
+    ImagePushFailed,
 )
 from tutorial_sdk.errors import (
     BackendError,
@@ -55,11 +56,15 @@ def test_build_image_command_and_flags():
         )
     run.assert_called_once()
     assert run.call_args.args[0] == [
-        "docker", "build",
-        "-f", "/proj/Dockerfile",
-        "-t", "demo:latest",
+        "docker",
+        "build",
+        "-f",
+        "/proj/Dockerfile",
+        "-t",
+        "demo:latest",
         "--no-cache",
-        "--platform", "linux/amd64",
+        "--platform",
+        "linux/amd64",
         "/proj",
     ]
 
@@ -84,27 +89,29 @@ def test_build_image_failure_uses_stderr_then_fallback():
 def test_missing_docker_binary_maps_to_unavailable():
     backend = DockerCliBackend()
     with mock.patch("subprocess.run", side_effect=FileNotFoundError):
-        with pytest.raises(BackendUnavailableError,
-                           match="not installed or not on PATH"):
+        with pytest.raises(
+            BackendUnavailableError, match="not installed or not on PATH"
+        ):
             backend.build_image(Path("."), Path("Dockerfile"), "t")
 
 
 def test_run_detached_precleans_and_starts():
     backend = DockerCliBackend()
     responses = [
-        completed(),                          # docker rm -f (pre-clean)
+        completed(),  # docker rm -f (pre-clean)
         completed(stdout="abcdef0123456789\n"),  # docker run -d
     ]
     with mock.patch("subprocess.run", side_effect=responses) as run:
-        h = backend.run_detached(
-            "demo:latest", name="tutorial-sdk-val-demo"
-        )
+        h = backend.run_detached("demo:latest", name="tutorial-sdk-val-demo")
 
     first, second = [c.args[0] for c in run.call_args_list]
     assert first == ["docker", "rm", "-f", "tutorial-sdk-val-demo"]
     assert second == [
-        "docker", "run", "-d",
-        "--name", "tutorial-sdk-val-demo",
+        "docker",
+        "run",
+        "-d",
+        "--name",
+        "tutorial-sdk-val-demo",
         "demo:latest",
     ]
     assert h.id == "abcdef0123456789"
@@ -129,11 +136,13 @@ def test_is_running_parses_inspect():
     ) as run:
         assert backend.is_running(handle()) is True
     assert run.call_args.args[0] == [
-        "docker", "inspect", "-f", "{{.State.Running}}", "c1",
+        "docker",
+        "inspect",
+        "-f",
+        "{{.State.Running}}",
+        "c1",
     ]
-    with mock.patch(
-        "subprocess.run", return_value=completed(stdout="false\n")
-    ):
+    with mock.patch("subprocess.run", return_value=completed(stdout="false\n")):
         assert backend.is_running(handle()) is False
 
 
@@ -165,7 +174,12 @@ def test_exec_output_selection():
     ) as run:
         res = backend.exec(handle(), ["jupyter", "lab", "--version"])
     assert run.call_args.args[0] == [
-        "docker", "exec", "c1", "jupyter", "lab", "--version",
+        "docker",
+        "exec",
+        "c1",
+        "jupyter",
+        "lab",
+        "--version",
     ]
     assert (res.exit_code, res.output) == (0, "4.2.0")
 
@@ -189,26 +203,42 @@ def test_run_foreground_command_shape():
     with mock.patch(
         "subprocess.run", return_value=completed(returncode=0)
     ) as run:
-        exit_info = backend.run_foreground(
-            "demo:latest", ports={8888: 9999}
-        )
+        exit_info = backend.run_foreground("demo:latest", ports={8888: 9999})
     assert run.call_args.args[0] == [
-        "docker", "run", "--rm", "-p", "9999:8888", "demo:latest",
+        "docker",
+        "run",
+        "--rm",
+        "-p",
+        "9999:8888",
+        "demo:latest",
     ]
     # Foreground runs must inherit host streams: capture_output is False.
     assert run.call_args.kwargs.get("capture_output", False) is False
     assert exit_info.command == (
-        "docker", "run", "--rm", "-p", "9999:8888", "demo:latest",
+        "docker",
+        "run",
+        "--rm",
+        "-p",
+        "9999:8888",
+        "demo:latest",
     )
 
     with mock.patch(
         "subprocess.run", return_value=completed(returncode=0)
     ) as run:
-        backend.run_foreground("demo:latest", ports={8888: 8888},
-                               interactive_shell=True)
+        backend.run_foreground(
+            "demo:latest", ports={8888: 8888}, interactive_shell=True
+        )
     assert run.call_args.args[0] == [
-        "docker", "run", "--rm", "-p", "8888:8888",
-        "-it", "--entrypoint", "/bin/sh", "demo:latest",
+        "docker",
+        "run",
+        "--rm",
+        "-p",
+        "8888:8888",
+        "-it",
+        "--entrypoint",
+        "/bin/sh",
+        "demo:latest",
     ]
 
 
@@ -217,7 +247,10 @@ def test_copy_in_command():
     with mock.patch("subprocess.run", return_value=completed()) as run:
         backend.copy_in(handle(), Path("/tmp/nb.ipynb"), "/work/nb.ipynb")
     assert run.call_args.args[0] == [
-        "docker", "cp", "/tmp/nb.ipynb", "c1:/work/nb.ipynb",
+        "docker",
+        "cp",
+        "/tmp/nb.ipynb",
+        "c1:/work/nb.ipynb",
     ]
 
 
@@ -297,8 +330,9 @@ def sdk_without_docker_package():
 
 
 def test_lazy_import_failure_is_unavailable(sdk_without_docker_package):
-    with pytest.raises(BackendUnavailableError,
-                       match="tutorial-sdk\\[docker\\]"):
+    with pytest.raises(
+        BackendUnavailableError, match="tutorial-sdk\\[docker\\]"
+    ):
         get_backend("docker-sdk")
 
 
@@ -326,49 +360,38 @@ def test_auto_falls_back_to_cli_when_binary_present(no_sdk_backend):
 
 def test_auto_raises_when_nothing_available(no_sdk_backend):
     with mock.patch("shutil.which", return_value=None):
-        with pytest.raises(BackendUnavailableError,
-                           match="No container backend is available"):
+        with pytest.raises(
+            BackendUnavailableError, match="No container backend is available"
+        ):
             get_backend("auto")
 
 
 def test_env_var_respected_for_auto(no_sdk_backend):
-    with mock.patch.dict(
-        os.environ, {"TUTORIAL_SDK_BACKEND": "docker-cli"}
-    ):
+    with mock.patch.dict(os.environ, {"TUTORIAL_SDK_BACKEND": "docker-cli"}):
         assert isinstance(get_backend(None), DockerCliBackend)
-    with mock.patch.dict(
-        os.environ, {"TUTORIAL_SDK_BACKEND": "docker-sdk"}
-    ):
+    with mock.patch.dict(os.environ, {"TUTORIAL_SDK_BACKEND": "docker-sdk"}):
         with pytest.raises(BackendUnavailableError):
             get_backend(None)
-    with mock.patch.dict(
-        os.environ, {"TUTORIAL_SDK_BACKEND": "bogus"}
-    ):
+    with mock.patch.dict(os.environ, {"TUTORIAL_SDK_BACKEND": "bogus"}):
         with pytest.raises(ConfigError):
             get_backend(None)
 
 
 def test_explicit_preference_beats_env_var():
-    with mock.patch.dict(
-        os.environ, {"TUTORIAL_SDK_BACKEND": "docker-sdk"}
-    ):
-        assert isinstance(
-            get_backend("docker-cli"), DockerCliBackend
-        )
+    with mock.patch.dict(os.environ, {"TUTORIAL_SDK_BACKEND": "docker-sdk"}):
+        assert isinstance(get_backend("docker-cli"), DockerCliBackend)
 
 
 def test_config_used_when_no_flag_or_env(no_sdk_backend):
-    assert isinstance(get_backend(config="docker-cli"), DockerCliBackend)
+    assert isinstance(get_backend(fallback_name="docker-cli"), DockerCliBackend)
     with pytest.raises(BackendUnavailableError):
-        get_backend(config="docker-sdk")
+        get_backend(fallback_name="docker-sdk")
 
 
 def test_env_var_beats_config(no_sdk_backend):
-    with mock.patch.dict(
-        os.environ, {"TUTORIAL_SDK_BACKEND": "docker-cli"}
-    ):
+    with mock.patch.dict(os.environ, {"TUTORIAL_SDK_BACKEND": "docker-cli"}):
         assert isinstance(
-            get_backend(config="docker-sdk"), DockerCliBackend
+            get_backend(fallback_name="docker-sdk"), DockerCliBackend
         )
 
 
@@ -376,13 +399,13 @@ def test_auto_defers_at_every_level(no_sdk_backend):
     # "auto" from the flag and the env var falls through to config.
     with mock.patch.dict(os.environ, {"TUTORIAL_SDK_BACKEND": "auto"}):
         assert isinstance(
-            get_backend("auto", config="docker-cli"), DockerCliBackend
+            get_backend("auto", fallback_name="docker-cli"), DockerCliBackend
         )
 
 
 def test_unknown_config_value_raises_config_error():
     with pytest.raises(ConfigError, match="'podman'"):
-        get_backend(config="podman")
+        get_backend(fallback_name="podman")
 
 
 def test_errors_reexported_from_backend_package():
@@ -432,3 +455,120 @@ def test_popen_missing_docker_binary_maps_to_unavailable():
             BackendUnavailableError, match="not installed or not on PATH"
         ):
             list(backend.stream_logs(handle("c1")))
+
+
+# ---------------------------------------------------------------------------
+# Streaming builds and push_image
+# ---------------------------------------------------------------------------
+
+
+def _streaming_process(lines, returncode=0):
+    process = mock.MagicMock()
+    process.stdout = iter(lines)
+    process.wait.return_value = returncode
+    return process
+
+
+def test_streaming_build_collects_lines_and_reports_failure():
+    seen = []
+    process = _streaming_process(["#1 load\n", "#2 ERROR\n"], returncode=1)
+    with mock.patch("subprocess.Popen", return_value=process) as popen:
+        with pytest.raises(ImageBuildFailed) as info:
+            DockerCliBackend().build_image(
+                Path("/p"), Path("/p/Dockerfile"), "t", log_callback=seen.append
+            )
+    assert popen.call_args.args[0] == [
+        "docker",
+        "build",
+        "-f",
+        "/p/Dockerfile",
+        "-t",
+        "t",
+        "/p",
+    ]
+    assert str(info.value) == "Docker build failed"
+    assert info.value.logs == ("#1 load", "#2 ERROR")
+    assert seen == ["#1 load", "#2 ERROR"]
+
+
+def test_push_image_commands_and_digest():
+    backend = DockerCliBackend()
+    responses = [
+        completed(stdout="pushed\n"),
+        completed(stdout="reg.io/org/demo@sha256:abc\n"),
+    ]
+    with mock.patch("subprocess.run", side_effect=responses) as run:
+        result = backend.push_image("reg.io/org/demo:1.0")
+    push, inspect = [c.args[0] for c in run.call_args_list]
+    assert push == ["docker", "push", "reg.io/org/demo:1.0"]
+    assert inspect == [
+        "docker",
+        "inspect",
+        "--format",
+        "{{index .RepoDigests 0}}",
+        "reg.io/org/demo:1.0",
+    ]
+    assert result == ImagePushResult(
+        image="reg.io/org/demo:1.0", digest="sha256:abc"
+    )
+
+
+@pytest.mark.parametrize(
+    "inspect",
+    [
+        completed(returncode=1, stderr="No such object"),
+        completed(stdout="\n"),
+        completed(stdout="<no value>\n"),
+    ],
+    ids=["inspect-fails", "empty", "no-digest"],
+)
+def test_push_image_digest_unavailable(inspect):
+    with mock.patch("subprocess.run", side_effect=[completed(), inspect]):
+        result = DockerCliBackend().push_image("demo:1")
+    assert result.digest is None
+
+
+@pytest.mark.parametrize(
+    ("stderr", "stdout", "expected"),
+    [
+        ("denied: no access\n", "", "denied: no access"),
+        ("", "error on stdout\n", "error on stdout"),
+        ("", "", "Docker push failed"),
+    ],
+)
+def test_push_image_failure_message_fallbacks(stderr, stdout, expected):
+    with mock.patch(
+        "subprocess.run",
+        return_value=completed(returncode=1, stderr=stderr, stdout=stdout),
+    ) as run:
+        with pytest.raises(ImagePushFailed) as info:
+            DockerCliBackend().push_image("demo:1")
+        assert str(info.value) == expected
+    run.assert_called_once()
+
+
+def test_streaming_push_forwards_lines():
+    seen = []
+    process = _streaming_process(["The push refers to\n", "1: digest\n"])
+    responses = [completed(stdout="demo@sha256:d1\n")]
+    with mock.patch("subprocess.Popen", return_value=process) as popen:
+        with mock.patch("subprocess.run", side_effect=responses):
+            result = DockerCliBackend().push_image(
+                "demo:1", log_callback=seen.append
+            )
+    assert popen.call_args.args[0] == ["docker", "push", "demo:1"]
+    assert seen == ["The push refers to", "1: digest"]
+    assert result.digest == "sha256:d1"
+
+
+def test_streaming_push_failure():
+    process = _streaming_process(["denied\n"], returncode=1)
+    with mock.patch("subprocess.Popen", return_value=process):
+        with pytest.raises(ImagePushFailed, match="Docker push failed"):
+            DockerCliBackend().push_image("demo:1", log_callback=print)
+
+
+def test_push_missing_docker_binary_maps_to_unavailable():
+    with mock.patch("subprocess.run", side_effect=FileNotFoundError):
+        with pytest.raises(BackendUnavailableError):
+            DockerCliBackend().push_image("demo:1")

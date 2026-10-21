@@ -8,7 +8,11 @@ is skipped rather than failed.
 
 The test images are built from ``busybox`` (override with
 ``TUTORIAL_SDK_CONTRACT_BASE_IMAGE``) and need no network once the
-base image is present locally.
+base image is present locally.  Push cases use the registry at
+``TUTORIAL_SDK_CONTRACT_REGISTRY`` (``host:port``) when set, and
+otherwise start one from ``registry:2`` (override with
+``TUTORIAL_SDK_CONTRACT_REGISTRY_IMAGE``); they are skipped when no
+registry can be had.
 """
 
 from __future__ import annotations
@@ -22,13 +26,20 @@ import subprocess
 import sys
 import threading
 import time
+import urllib.error
+import urllib.request
 import uuid
 from pathlib import Path
 
 import pytest
 
 from tutorial_sdk.backend import DockerCliBackend, get_backend
-from tutorial_sdk.backend.errors import ContainerStartFailed, CopyFailed
+from tutorial_sdk.backend.errors import (
+    ContainerStartFailed,
+    CopyFailed,
+    ImageBuildFailed,
+    ImagePushFailed,
+)
 from tutorial_sdk.errors import BackendUnavailableError
 from tutorial_sdk.validator.container import ContainerValidator
 
@@ -37,6 +48,10 @@ from .mock_backend import make_spec
 pytestmark = pytest.mark.docker
 
 BASE_IMAGE = os.environ.get("TUTORIAL_SDK_CONTRACT_BASE_IMAGE", "busybox:1.36")
+REGISTRY = os.environ.get("TUTORIAL_SDK_CONTRACT_REGISTRY")
+REGISTRY_IMAGE = os.environ.get(
+    "TUTORIAL_SDK_CONTRACT_REGISTRY_IMAGE", "registry:2"
+)
 RUN_ID = uuid.uuid4().hex[:8]
 
 _MOCK_JUPYTER = "#!/bin/sh\\necho 4.2.0\\n"
@@ -159,6 +174,146 @@ def test_build_image_returns_tag(backend, tmp_path):
         assert _inspect(tag) is not None
     finally:
         subprocess.run(["docker", "rmi", "-f", tag], capture_output=True)
+
+
+def _all_containers() -> list[str]:
+    result = subprocess.run(
+        ["docker", "ps", "-aq", "--no-trunc"], capture_output=True, text=True
+    )
+    return result.stdout.split()
+
+
+def _rmi(*tags: str) -> None:
+    subprocess.run(["docker", "rmi", "-f", *tags], capture_output=True)
+
+
+def test_build_image_reports_image_id(backend, tmp_path):
+    (tmp_path / "Dockerfile").write_text(
+        f"FROM {BASE_IMAGE}\nLABEL tsdk.case=id-{RUN_ID}\n"
+    )
+    tag = f"tutorial-sdk-contract-build-id:{RUN_ID}-{backend.name}"
+    try:
+        result = backend.build_image(tmp_path, tmp_path / "Dockerfile", tag)
+        if backend.name == "docker-sdk":
+            assert result.image_id == _inspect(tag)["Id"]
+        else:
+            assert result.image_id is None
+    finally:
+        _rmi(tag)
+
+
+def test_build_streams_output_to_callback(backend, tmp_path):
+    marker = f"tsdk-out-{RUN_ID}-{backend.name}"
+    (tmp_path / "Dockerfile").write_text(
+        f"FROM {BASE_IMAGE}\nRUN echo {marker}\n"
+    )
+    tag = f"tutorial-sdk-contract-build-log:{RUN_ID}-{backend.name}"
+    seen: list[str] = []
+    try:
+        result = backend.build_image(
+            tmp_path, tmp_path / "Dockerfile", tag, log_callback=seen.append
+        )
+        assert any(marker in line for line in seen)
+        assert result.logs == tuple(seen)
+    finally:
+        _rmi(tag)
+
+
+@pytest.mark.parametrize(
+    "streamed", [False, True], ids=["captured", "streamed"]
+)
+def test_build_failure_carries_output(backend, tmp_path, streamed):
+    marker = f"tsdk-fail-{RUN_ID}"
+    (tmp_path / "Dockerfile").write_text(
+        f"FROM {BASE_IMAGE}\nRUN echo {marker} && exit 3\n"
+    )
+    seen: list[str] = []
+    before = set(_all_containers())
+    with pytest.raises(ImageBuildFailed) as info:
+        backend.build_image(
+            tmp_path,
+            tmp_path / "Dockerfile",
+            f"tutorial-sdk-contract-build-fail:{RUN_ID}",
+            no_cache=True,
+            log_callback=seen.append if streamed else None,
+        )
+    # No intermediate container is left behind.
+    assert set(_all_containers()) <= before
+    if streamed:
+        assert any(marker in line for line in seen)
+        assert info.value.logs == tuple(seen)
+    else:
+        # The output is in the message (and, where the backend can
+        # separate it, also in ``logs``).
+        assert marker in str(info.value)
+
+
+def test_build_with_dockerfile_outside_context(backend, tmp_path):
+    context = tmp_path / "context"
+    context.mkdir()
+    (context / "payload.txt").write_text("payload")
+    elsewhere = tmp_path / "elsewhere"
+    elsewhere.mkdir()
+    (elsewhere / "Dockerfile.custom").write_text(
+        f"FROM {BASE_IMAGE}\nCOPY payload.txt /payload.txt\n"
+        "RUN test -f /payload.txt\n"
+    )
+    tag = f"tutorial-sdk-contract-build-df:{RUN_ID}-{backend.name}"
+    try:
+        backend.build_image(context, elsewhere / "Dockerfile.custom", tag)
+        assert _inspect(tag) is not None
+    finally:
+        _rmi(tag)
+
+
+def test_build_relative_paths_resolve_from_cwd(backend, tmp_path, monkeypatch):
+    project = tmp_path / "proj"
+    project.mkdir()
+    (project / "Dockerfile").write_text(f"FROM {BASE_IMAGE}\n")
+    monkeypatch.chdir(tmp_path)
+    tag = f"tutorial-sdk-contract-build-rel:{RUN_ID}-{backend.name}"
+    try:
+        backend.build_image(Path("proj"), Path("proj/Dockerfile"), tag)
+        assert _inspect(tag) is not None
+    finally:
+        _rmi(tag)
+
+
+def test_build_honours_dockerignore(backend, tmp_path):
+    (tmp_path / "kept.txt").write_text("kept")
+    (tmp_path / "ignored.txt").write_text("ignored")
+    (tmp_path / ".dockerignore").write_text("ignored.txt\n")
+    (tmp_path / "Dockerfile").write_text(
+        f"FROM {BASE_IMAGE}\nCOPY . /ctx\n"
+        "RUN test -f /ctx/kept.txt && test ! -e /ctx/ignored.txt\n"
+    )
+    tag = f"tutorial-sdk-contract-build-ignore:{RUN_ID}-{backend.name}"
+    try:
+        backend.build_image(tmp_path, tmp_path / "Dockerfile", tag)
+    finally:
+        _rmi(tag)
+
+
+def test_build_buildkit_only_dockerfile(backend, tmp_path):
+    # The SDK backend routes this through the Docker CLI.
+    (tmp_path / "Dockerfile").write_text(
+        f"FROM {BASE_IMAGE}\n"
+        "RUN --mount=type=tmpfs,target=/scratch echo x > /scratch/x\n"
+    )
+    tag = f"tutorial-sdk-contract-build-bk:{RUN_ID}-{backend.name}"
+    try:
+        backend.build_image(tmp_path, tmp_path / "Dockerfile", tag)
+        assert _inspect(tag) is not None
+    finally:
+        _rmi(tag)
+
+
+def test_build_missing_context_fails(backend, tmp_path):
+    missing = tmp_path / "missing"
+    with pytest.raises(ImageBuildFailed, match="unable to prepare context"):
+        backend.build_image(
+            missing, missing / "Dockerfile", f"tsdk-missing:{RUN_ID}"
+        )
 
 
 def test_run_detached_survives_window(backend, images, started):
@@ -528,3 +683,120 @@ def test_sdk_stream_survives_silence_beyond_client_timeout(
     result = sdk_backend.run_foreground(images["quiet"])  # silent for 4 s
     assert result.returncode == 0
     assert "done" in capfd.readouterr().out
+
+
+# ---------------------------------------------------------------------------
+# Image push
+# ---------------------------------------------------------------------------
+
+
+def _registry_ready(address: str) -> bool:
+    try:
+        with urllib.request.urlopen(f"http://{address}/v2/", timeout=2):
+            return True
+    except urllib.error.HTTPError:
+        return True  # it answers (e.g. 401 when auth is enabled)
+    except OSError:
+        return False
+
+
+@pytest.fixture(scope="session")
+def registry(images):
+    """Address (``host:port``) of a registry the daemon can push to."""
+    if REGISTRY:
+        yield REGISTRY
+        return
+    name = f"tsdk-ct-registry-{RUN_ID}"
+    port = _free_port()
+    result = subprocess.run(
+        [
+            "docker",
+            "run",
+            "-d",
+            "--rm",
+            "--name",
+            name,
+            "-p",
+            f"127.0.0.1:{port}:5000",
+            REGISTRY_IMAGE,
+        ],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        pytest.skip(f"cannot start {REGISTRY_IMAGE}: {result.stderr.strip()}")
+    address = f"localhost:{port}"
+    try:
+        if not _wait_until(lambda: _registry_ready(address), timeout=30):
+            pytest.skip(f"registry at {address} did not come up")
+        yield address
+    finally:
+        subprocess.run(["docker", "rm", "-f", name], capture_output=True)
+
+
+@pytest.fixture
+def tagged(images):
+    """Tag the ``napper`` image under new names; untag afterwards."""
+    tags: list[str] = []
+
+    def tag(name: str) -> str:
+        subprocess.run(
+            ["docker", "tag", images["napper"], name],
+            check=True,
+            capture_output=True,
+        )
+        tags.append(name)
+        return name
+
+    yield tag
+    if tags:
+        subprocess.run(["docker", "rmi", *tags], capture_output=True)
+
+
+@pytest.mark.parametrize(
+    "streamed", [False, True], ids=["captured", "streamed"]
+)
+def test_push_image_reports_digest(backend, registry, tagged, streamed):
+    tag = tagged(f"{registry}/tsdk-contract-push:{RUN_ID}-{backend.name}")
+    seen: list[str] = []
+    result = backend.push_image(
+        tag, log_callback=seen.append if streamed else None
+    )
+    assert result.image == tag
+    assert result.digest and result.digest.startswith("sha256:")
+    assert any(
+        f"@{result.digest}" in digest for digest in _inspect(tag)["RepoDigests"]
+    )
+    if streamed:
+        # Both backends show the registry's "digest: sha256:..." line.
+        assert any(f"digest: {result.digest}" in line for line in seen)
+
+
+def test_push_without_version_pushes_latest(backend, registry, tagged):
+    repository = f"{registry}/tsdk-contract-latest-{RUN_ID}-{backend.name}"
+    tagged(f"{repository}:latest")
+    result = backend.push_image(repository)
+    assert result.digest and result.digest.startswith("sha256:")
+
+
+def test_push_missing_local_image_fails(backend, registry):
+    with pytest.raises(ImagePushFailed):
+        backend.push_image(f"{registry}/tsdk-contract-absent:{RUN_ID}")
+
+
+_UNREACHABLE_REGISTRY_ERRORS = (
+    "connection refused",
+    "context deadline exceeded",
+    "Client.Timeout exceeded",
+)
+
+
+def test_push_unreachable_registry_fails(backend, tagged):
+    tag = tagged(f"localhost:{_free_port()}/tsdk-contract-nowhere:{RUN_ID}")
+    began = time.monotonic()
+    with pytest.raises(ImagePushFailed) as info:
+        backend.push_image(tag)
+    # Both backends report the daemon's message verbatim.
+    message = str(info.value)
+    assert any(err in message for err in _UNREACHABLE_REGISTRY_ERRORS)
+    assert time.monotonic() - began < 60

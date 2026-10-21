@@ -18,7 +18,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Iterator, Protocol, runtime_checkable
 
-#: Callback invoked with each build log line as it is produced.
+#: Callback invoked with each build or push log line as it is produced.
 LogCallback = Callable[[str], None]
 
 
@@ -29,6 +29,19 @@ class ImageBuildResult:
     image: str
     image_id: str | None = None
     logs: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class ImagePushResult:
+    """Outcome of a successful image push.
+
+    ``digest`` is the registry digest (``sha256:...``) read from the
+    image's first repository digest after the push, or ``None`` when
+    it cannot be determined.
+    """
+
+    image: str
+    digest: str | None = None
 
 
 @dataclass(frozen=True)
@@ -102,7 +115,35 @@ class ContainerBackend(Protocol):
             An ``ImageBuildResult`` on success.
 
         Raises:
-            ImageBuildFailed: If the build exits non-zero.
+            ImageBuildFailed: If the build fails.  Its ``logs``
+                carry the build output collected so far.
+            BackendUnavailableError: If the backend cannot run.
+        """
+        ...
+
+    def push_image(
+        self,
+        tag: str,
+        *,
+        log_callback: LogCallback | None = None,
+    ) -> ImagePushResult:
+        """Push the local image ``tag`` to its registry.
+
+        Registry credentials come from the Docker configuration, as
+        for ``docker push``.  A tag without an explicit version
+        pushes ``:latest``.
+
+        Args:
+            tag: Image reference to push (``[registry/]repo[:tag]``).
+            log_callback: Optional sink receiving push progress
+                lines as they are produced.
+
+        Returns:
+            An ``ImagePushResult`` with the registry digest, when
+            it can be read.
+
+        Raises:
+            ImagePushFailed: If the push fails.
             BackendUnavailableError: If the backend cannot run.
         """
         ...

@@ -3,9 +3,11 @@
 Implements ``ContainerBackend`` by shelling out to the ``docker``
 binary.  The command construction in this module is a direct
 relocation of the ``subprocess`` logic that previously lived in
-``builder/docker.py``, ``validator/container.py``, and
-``runtime/launcher.py``; observable behavior (commands issued,
-messages produced) is preserved.
+``builder/docker.py``, ``validator/container.py``,
+``runtime/launcher.py``, and the ``ci`` command's image push in
+``cli.py``; observable behavior (commands issued, messages produced)
+is preserved.  It is the only module that runs the ``docker``
+binary.
 """
 
 from __future__ import annotations
@@ -20,11 +22,17 @@ from .base import (
     ContainerHandle,
     ExecResult,
     ImageBuildResult,
+    ImagePushResult,
     LogCallback,
     RunExit,
     observe_running,
 )
-from .errors import ContainerStartFailed, CopyFailed, ImageBuildFailed
+from .errors import (
+    ContainerStartFailed,
+    CopyFailed,
+    ImageBuildFailed,
+    ImagePushFailed,
+)
 
 _DOCKER_MISSING_MSG = "Docker is not installed or not on PATH."
 
@@ -111,7 +119,35 @@ class DockerCliBackend:
         except FileNotFoundError as exc:
             raise BackendUnavailableError(_DOCKER_MISSING_MSG) from exc
 
-    # -- image build -------------------------------------------------------
+    def _stream(
+        self,
+        command: list[str],
+        log_callback: LogCallback,
+    ) -> tuple[int, tuple[str, ...]]:
+        """Run a docker command, echoing each output line to a callback.
+
+        Stderr is merged into stdout.  If the callback raises or the
+        user interrupts, the docker process is killed rather than left
+        running.
+
+        Returns:
+            The exit code and the collected output lines.
+        """
+        lines: list[str] = []
+        process = self._popen(command)
+        assert process.stdout is not None
+        try:
+            for line in process.stdout:
+                line = line.rstrip("\n")
+                lines.append(line)
+                log_callback(line)
+        except BaseException:
+            process.kill()
+            process.wait()
+            raise
+        return process.wait(), tuple(lines)
+
+    # -- images ------------------------------------------------------------
 
     def build_image(
         self,
@@ -149,27 +185,56 @@ class DockerCliBackend:
 
         # Streaming variant: echo each line to the callback while
         # collecting it for the result / failure report.
-        lines: list[str] = []
-        process = self._popen(command)
-        assert process.stdout is not None
-        try:
-            for line in process.stdout:
-                line = line.rstrip("\n")
-                lines.append(line)
-                log_callback(line)
-        except BaseException:
-            # Callback failed or the user interrupted: don't leave
-            # an orphaned build running.
-            process.kill()
-            process.wait()
-            raise
-        returncode = process.wait()
+        returncode, lines = self._stream(command, log_callback)
         if returncode != 0:
-            raise ImageBuildFailed(
-                "Docker build failed",
-                logs=tuple(lines),
-            )
-        return ImageBuildResult(image=tag, logs=tuple(lines))
+            raise ImageBuildFailed("Docker build failed", logs=lines)
+        return ImageBuildResult(image=tag, logs=lines)
+
+    def push_image(
+        self,
+        tag: str,
+        *,
+        log_callback: LogCallback | None = None,
+    ) -> ImagePushResult:
+        """Run ``docker push``, then read the digest with ``docker inspect``.
+
+        Without ``log_callback`` the output is captured and a failure
+        reports ``docker push``'s stderr; with it, output is streamed
+        line by line (stderr merged into stdout).
+        """
+        command = ["docker", "push", tag]
+        if log_callback is None:
+            result = self._run(command)
+            if result.returncode != 0:
+                message = (
+                    result.stderr.strip()
+                    or result.stdout.strip()
+                    or "Docker push failed"
+                )
+                raise ImagePushFailed(message)
+        else:
+            returncode, _ = self._stream(command, log_callback)
+            if returncode != 0:
+                raise ImagePushFailed("Docker push failed")
+        return ImagePushResult(image=tag, digest=self._repo_digest(tag))
+
+    def _repo_digest(self, tag: str) -> str | None:
+        """Return the digest of the image's first repository digest."""
+        result = self._run(
+            [
+                "docker",
+                "inspect",
+                "--format",
+                "{{index .RepoDigests 0}}",
+                tag,
+            ]
+        )
+        if result.returncode != 0:
+            return None
+        raw = result.stdout.strip()
+        if "@" not in raw:
+            return None
+        return raw.split("@", 1)[1]
 
     # -- container lifecycle -----------------------------------------------
 

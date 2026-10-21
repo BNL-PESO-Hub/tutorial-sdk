@@ -26,6 +26,10 @@ class ImageBuildFailed(BackendError):
         self.logs = logs
 
 
+class ImagePushFailed(BackendError):
+    """Pushing an image to its registry failed."""
+
+
 class ContainerStartFailed(BackendError):
     """A detached container could not be started."""
 

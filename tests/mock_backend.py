@@ -16,11 +16,13 @@ from tutorial_sdk.backend.base import (
     ContainerHandle,
     ExecResult,
     ImageBuildResult,
+    ImagePushResult,
     RunExit,
 )
 from tutorial_sdk.backend.errors import (
     ContainerStartFailed,
     ImageBuildFailed,
+    ImagePushFailed,
 )
 
 
@@ -30,6 +32,7 @@ def make_spec(
     dockerfile: str = "Dockerfile",
     cache: bool = True,
     expose_port: int = 8888,
+    backend: str | None = None,
 ) -> SimpleNamespace:
     """Build a duck-typed stand-in for ``TutorialSpec``."""
     return SimpleNamespace(
@@ -38,6 +41,7 @@ def make_spec(
             image=image,
             dockerfile=dockerfile,
             cache=cache,
+            backend=backend,
         ),
         runtime=SimpleNamespace(expose_port=expose_port),
     )
@@ -52,6 +56,8 @@ class MockBackend:
         self,
         *,
         build_error: str | None = None,
+        push_error: str | None = None,
+        push_digest: str | None = "sha256:pushed",
         start_error: str | None = None,
         stays_running: bool = True,
         exec_result: ExecResult | None = None,
@@ -59,6 +65,8 @@ class MockBackend:
         run_returncode: int = 0,
     ) -> None:
         self.build_error = build_error
+        self.push_error = push_error
+        self.push_digest = push_digest
         self.start_error = start_error
         self.stays_running = stays_running
         self.exec_result = exec_result or ExecResult(0, "4.2.0")
@@ -88,6 +96,12 @@ class MockBackend:
             raise ImageBuildFailed(self.build_error, logs=("l1", "l2"))
         return ImageBuildResult(image=tag, image_id="sha256:abc", logs=())
 
+    def push_image(self, tag: str, *, log_callback=None) -> ImagePushResult:
+        self.calls.append(("push_image", tag))
+        if self.push_error is not None:
+            raise ImagePushFailed(self.push_error)
+        return ImagePushResult(image=tag, digest=self.push_digest)
+
     def run_detached(
         self,
         image: str,
@@ -99,8 +113,9 @@ class MockBackend:
         self.calls.append(("run_detached", image, name, ports, remove))
         if self.start_error is not None:
             raise ContainerStartFailed(self.start_error)
-        return ContainerHandle(id="cid123", name=name or "cid123",
-                               backend=self.name)
+        return ContainerHandle(
+            id="cid123", name=name or "cid123", backend=self.name
+        )
 
     def is_running(self, container: ContainerHandle) -> bool:
         self.calls.append(("is_running", container.name))
@@ -142,9 +157,7 @@ class MockBackend:
         ports: dict[int, int] | None = None,
         interactive_shell: bool = False,
     ) -> RunExit:
-        self.calls.append(
-            ("run_foreground", image, ports, interactive_shell)
-        )
+        self.calls.append(("run_foreground", image, ports, interactive_shell))
         command = ["docker", "run", "--rm"]
         for cport, hport in (ports or {}).items():
             command.extend(["-p", f"{hport}:{cport}"])
