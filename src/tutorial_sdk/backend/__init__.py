@@ -30,12 +30,16 @@ from typing import Literal, get_args
 
 from ..errors import BackendError, BackendUnavailableError, ConfigError
 from .base import (
+    MANAGED_LABEL,
+    MANAGED_LABEL_VALUE,
+    BackendInfo,
     ContainerBackend,
     ContainerHandle,
     ExecResult,
     ImageBuildResult,
     ImagePushResult,
     LogCallback,
+    ManagedContainer,
     RunExit,
 )
 from .docker_cli import DockerCliBackend
@@ -48,7 +52,10 @@ from .errors import (
 
 __all__ = [
     "BACKEND_CHOICES",
+    "MANAGED_LABEL",
+    "MANAGED_LABEL_VALUE",
     "BackendError",
+    "BackendInfo",
     "BackendName",
     "BackendUnavailableError",
     "ContainerBackend",
@@ -63,8 +70,10 @@ __all__ = [
     "ImagePushFailed",
     "ImagePushResult",
     "LogCallback",
+    "ManagedContainer",
     "RunExit",
     "get_backend",
+    "preference_source",
 ]
 
 _ENV_VAR = "TUTORIAL_SDK_BACKEND"
@@ -126,15 +135,46 @@ def _resolve_preference(
     fallback_name: str | None,
 ) -> str:
     """Apply the selection precedence and validate the result."""
-    for candidate in (name, os.environ.get(_ENV_VAR), fallback_name):
+    return preference_source(name, fallback_name=fallback_name)[0]
+
+
+def preference_source(
+    backend: str | None = None,
+    *,
+    fallback_name: str | None = None,
+) -> tuple[str, str]:
+    """Return the backend name the selection precedence picks, and why.
+
+    Applies the same precedence as :func:`get_backend` without loading
+    any backend.
+
+    Args:
+        backend: Explicit backend name (e.g. a ``--backend`` value).
+        fallback_name: Backend name from project configuration.
+
+    Returns:
+        ``(name, source)``: ``name`` is ``"auto"``, ``"docker-cli"``,
+        or ``"docker-sdk"``; ``source`` is ``"argument"``,
+        ``"TUTORIAL_SDK_BACKEND"``, ``"configuration"``, or
+        ``"default"`` (nothing named a backend).
+
+    Raises:
+        ConfigError: If the deciding value is not a known choice.
+    """
+    candidates = (
+        (backend, "argument"),
+        (os.environ.get(_ENV_VAR), _ENV_VAR),
+        (fallback_name, "configuration"),
+    )
+    for candidate, source in candidates:
         if candidate and candidate != "auto":
             if candidate not in BACKEND_CHOICES:
                 raise ConfigError(
                     f"Unknown container backend {candidate!r}; "
                     f"expected one of {', '.join(BACKEND_CHOICES)}."
                 )
-            return candidate
-    return "auto"
+            return candidate, source
+    return "auto", "default"
 
 
 def get_backend(

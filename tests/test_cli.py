@@ -386,3 +386,60 @@ def test_ci_validate_mode_needs_no_backend(tmp_path, monkeypatch):
 
     monkeypatch.setattr("tutorial_sdk.cli.get_backend", forbidden)
     assert main(["ci", "--config", str(spec_path)]) == 0
+
+
+# ---------------------------------------------------------------------------
+# --build-output
+# ---------------------------------------------------------------------------
+
+
+def _echo_backend(**kwargs):
+    return MockBackend(build_lines=("Step 1/2 : FROM base", "done"), **kwargs)
+
+
+def test_ci_build_output_streams_to_stdout_and_log(
+    tmp_path, monkeypatch, capsys
+):
+    backend = _echo_backend()
+    code, _, _, log = _run_ci(
+        tmp_path, monkeypatch, backend, "--mode", "build", "--build-output"
+    )
+    assert code == 0
+    assert backend.build_callbacks[0] is not None
+    out = capsys.readouterr().out
+    assert "Building container image...\nStep 1/2 : FROM base\ndone\n" in out
+    assert "Step 1/2 : FROM base\ndone\nContainer built in" in log
+
+
+def test_ci_without_build_output_stays_silent(tmp_path, monkeypatch, capsys):
+    backend = _echo_backend()
+    code, _, _, log = _run_ci(tmp_path, monkeypatch, backend, "--mode", "build")
+    assert code == 0
+    assert backend.build_callbacks == [None]
+    assert "Step 1/2" not in capsys.readouterr().out
+    assert "Step 1/2" not in log
+
+
+def test_ci_build_output_failure(tmp_path, monkeypatch):
+    backend = _echo_backend(build_error="Docker build failed")
+    code, _, build_report, log = _run_ci(
+        tmp_path, monkeypatch, backend, "--mode", "build", "--build-output"
+    )
+    assert code == 3
+    assert build_report["status"] == "failure"
+    assert "done\nBuild failed: Docker build failed" in log
+
+
+def test_build_output_flag(tmp_path, monkeypatch, capsys):
+    spec_path = _write_spec(tmp_path)
+    backend = _echo_backend()
+    monkeypatch.setattr(
+        "tutorial_sdk.builder.docker.get_backend",
+        lambda backend_=None, **kwargs: backend,
+    )
+    assert main(["build", "--config", str(spec_path), "--build-output"]) == 0
+    assert capsys.readouterr().out == "Step 1/2 : FROM base\ndone\n"
+
+    assert main(["build", "--config", str(spec_path)]) == 0
+    assert capsys.readouterr().out == ""
+    assert backend.build_callbacks[1] is None

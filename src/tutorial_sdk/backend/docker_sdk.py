@@ -20,6 +20,10 @@ implemented natively via docker-py.  Two cases go through an internal
   that docker-py uses runs the classic builder.  When the ``docker``
   binary is missing, such builds are still attempted natively.
 
+Foreground containers carry the managed-container label
+(:data:`~tutorial_sdk.backend.base.MANAGED_LABEL`), as with the CLI
+backend.
+
 All ``docker.errors.*``, ``requests``, and ``urllib3`` exceptions are
 translated into the backend error hierarchy here; nothing above this
 module ever sees a docker-py type.
@@ -36,19 +40,27 @@ import sys
 import tarfile
 import threading
 import time
-from contextlib import contextmanager
+from contextlib import AbstractContextManager, contextmanager
+from datetime import datetime
 from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING, Any, Callable, Iterator, TextIO
 
 from ..errors import BackendError, BackendUnavailableError
 from .base import (
+    MANAGED_LABEL,
+    MANAGED_LABEL_VALUE,
+    STOP_GRACE,
+    STOP_HINT,
+    BackendInfo,
     ContainerHandle,
     ExecResult,
     ImageBuildResult,
     ImagePushResult,
     LogCallback,
+    ManagedContainer,
     RunExit,
     observe_running,
+    trap_signals,
 )
 from .docker_cli import DockerCliBackend, foreground_command
 from .errors import (
@@ -74,7 +86,7 @@ _RUN_ERROR_EXIT_CODE = 125
 
 #: Seconds a container may take to exit after the first forwarded
 #: signal before it is killed (the ``docker stop`` default).
-_STOP_GRACE = 10.0
+_STOP_GRACE = STOP_GRACE
 
 #: Seconds to keep draining container output after it exits.
 _DRAIN_TIMEOUT = 5.0
@@ -253,7 +265,7 @@ def _port_bindings(ports: dict[int, int] | None) -> dict[str, int]:
     }
 
 
-def _connect(docker: Any) -> DockerClient:
+def _connect(docker: Any) -> tuple[DockerClient, str | None, str]:
     """Create a client from the environment or the active context.
 
     ``docker.from_env()`` honours ``DOCKER_HOST`` but, unlike the
@@ -261,16 +273,29 @@ def _connect(docker: Any) -> DockerClient:
     OrbStack often expose the daemon only through a context socket,
     so when ``DOCKER_HOST`` is unset and the default socket fails,
     retry with the current context's (non-TLS) endpoint.
+
+    Returns:
+        The client, the endpoint it uses (``None`` for docker-py's
+        platform default), and where the endpoint comes from
+        (``DOCKER_HOST``, ``context <name>``, or ``default``).
     """
+    host = os.environ.get("DOCKER_HOST")
     try:
-        return docker.from_env()
+        client = docker.from_env()
     except docker.errors.DockerException:
-        if os.environ.get("DOCKER_HOST"):
+        if host:
             raise
-        host = _context_host()
-        if not host:
+        context_host = _context_host()
+        if not context_host:
             raise
-        return docker.DockerClient(base_url=host)
+        return (
+            docker.DockerClient(base_url=context_host),
+            context_host,
+            f"context {_context_name() or '(current)'}",
+        )
+    if host:
+        return client, host, "DOCKER_HOST"
+    return client, None, "default"
 
 
 def _context_host() -> str | None:
@@ -294,6 +319,43 @@ def _context_host() -> str | None:
     return host if host and host != default else None
 
 
+def _context_name() -> str | None:
+    """Return the name of the current Docker context (best effort)."""
+    name = os.environ.get("DOCKER_CONTEXT")
+    if name:
+        return name
+    try:
+        from docker.context.config import get_current_context_name
+
+        return get_current_context_name()
+    except Exception:  # best-effort discovery only
+        return None
+
+
+def _default_endpoint() -> str | None:
+    """Return docker-py's default daemon address, in CLI notation."""
+    try:
+        from docker.constants import DEFAULT_UNIX_SOCKET, IS_WINDOWS_PLATFORM
+    except ImportError:  # pragma: no cover - docker-py layout changed
+        return None
+    if IS_WINDOWS_PLATFORM:
+        return "npipe:////./pipe/docker_engine"
+    return DEFAULT_UNIX_SOCKET.replace("http+unix://", "unix://")
+
+
+def _parse_created(value: Any) -> datetime | None:
+    """Parse an Engine API ``Created`` timestamp (RFC 3339, ns precision)."""
+    if not isinstance(value, str):
+        return None
+    match = re.match(
+        r"(\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d)(?:\.\d+)?(Z|[+-]\d\d:\d\d)", value
+    )
+    if match is None:
+        return None
+    zone = "+00:00" if match.group(2) == "Z" else match.group(2)
+    return datetime.fromisoformat(match.group(1) + zone)
+
+
 def _tar_single(src: Path, arcname: str) -> bytes:
     """Pack ``src`` as ``arcname`` into an in-memory tar archive.
 
@@ -311,39 +373,12 @@ def _tar_single(src: Path, arcname: str) -> bytes:
     return buffer.getvalue()
 
 
-@contextmanager
-def _trap_signals() -> Iterator[list[int]]:
-    """Record SIGINT/SIGTERM instead of acting on them, for the duration.
+def _trap_signals() -> AbstractContextManager[list[int]]:
+    """Record SIGINT/SIGTERM instead of acting on them.
 
-    Yields the list the received signal numbers are appended to.  The
-    handler only records, so a signal can never interrupt the run
-    half-way through a step; the caller polls the list instead.
-
-    Handlers can only be installed from the main thread; elsewhere
-    nothing is installed (signals are delivered to the main thread
-    only).  Signals the process ignores (``SIG_IGN``) or whose handler
-    was not installed from Python are left alone.  Previous handlers
-    are restored on exit.
+    See :func:`~tutorial_sdk.backend.base.trap_signals`.
     """
-    received: list[int] = []
-    if threading.current_thread() is not threading.main_thread():
-        yield received
-        return
-
-    def _record(signum: int, frame: Any) -> None:
-        received.append(signum)
-
-    previous = {}
-    try:
-        for signum in _FORWARDED_SIGNALS:
-            handler = signal.getsignal(signum)
-            if handler is not None and handler is not signal.SIG_IGN:
-                previous[signum] = handler
-                signal.signal(signum, _record)
-        yield received
-    finally:
-        for signum, handler in previous.items():
-            signal.signal(signum, handler)
+    return trap_signals(_FORWARDED_SIGNALS)
 
 
 class _Worker(threading.Thread):
@@ -458,13 +493,18 @@ class DockerSdkBackend:
             urllib3.exceptions.ReadTimeoutError,
         )
         self._parse_repository_tag = docker.utils.parse_repository_tag
+        self._docker_version = str(getattr(docker, "__version__", "")) or None
         self._cli = DockerCliBackend()
+        self._endpoint: str | None = None
+        self._endpoint_source: str | None = None
 
         if client is not None:
             self._client = client
             return
         try:
-            self._client = _connect(docker)
+            self._client, self._endpoint, self._endpoint_source = _connect(
+                docker
+            )
             self._client.ping()
         except (docker.errors.DockerException, *self._request_error) as exc:
             raise BackendUnavailableError(
@@ -769,7 +809,8 @@ class DockerSdkBackend:
     ) -> Container:
         """Create (not start) a container, pulling a missing image."""
         bindings = _port_bindings(ports)
-        options = {"ports": bindings} if bindings else {}
+        options: dict[str, Any] = {"ports": bindings} if bindings else {}
+        options["labels"] = {MANAGED_LABEL: MANAGED_LABEL_VALUE}
         try:
             return self._client.containers.create(image, **options)
         except self._errors.ImageNotFound:
@@ -852,10 +893,7 @@ class DockerSdkBackend:
                 signum = received.pop(0)
                 if forwarded_at is None:
                     forwarded_at = time.monotonic()
-                    print(
-                        "Stopping container (interrupt again to force)...",
-                        file=sys.stderr,
-                    )
+                    print(STOP_HINT, file=sys.stderr)
                     self._signal(container, signal.Signals(signum).name)
                 else:
                     killed = True
@@ -1043,3 +1081,111 @@ class DockerSdkBackend:
                 yield pending
         finally:
             stream.close()
+
+    # -- diagnostics ---------------------------------------------------------
+
+    def describe(self) -> BackendInfo:
+        """Describe docker-py and the daemon it talks to.
+
+        Includes whether the Engine API build endpoint still runs the
+        classic builder (see :meth:`_probe_classic_builder`).  Used by
+        ``tutorial-sdk doctor``; never raises.
+        """
+        notes: list[str] = []
+        endpoint = self._endpoint
+        if endpoint is None and self._endpoint_source == "default":
+            endpoint = _default_endpoint()
+        try:
+            version = self._client.version()
+        except (self._errors.DockerException, *self._request_error) as exc:
+            return BackendInfo(
+                name=self.name,
+                client_version=self._docker_version,
+                endpoint=endpoint,
+                endpoint_source=self._endpoint_source,
+                daemon_error=_daemon_message(exc),
+            )
+        try:
+            classic, detail = self._probe_classic_builder()
+        except BackendError as exc:
+            classic, detail = None, f"probe failed: {exc}"
+        if detail:
+            notes.append(f"classic builder: {detail}")
+        return BackendInfo(
+            name=self.name,
+            client_version=self._docker_version,
+            server_version=version.get("Version"),
+            api_version=version.get("ApiVersion"),
+            endpoint=endpoint,
+            endpoint_source=self._endpoint_source,
+            classic_builder=classic,
+            notes=tuple(notes),
+        )
+
+    def _probe_classic_builder(self) -> tuple[bool, str | None]:
+        """Return whether the daemon still serves the classic builder.
+
+        docker-py can only build through the Engine API's classic
+        builder.  The probe builds ``FROM scratch`` alone: the classic
+        builder runs the step (``Step 1/1 : FROM scratch``) and then
+        rejects the build because no image was produced, so nothing is
+        left behind.
+
+        Returns:
+            Whether the classic builder ran, and the daemon's error
+            message when it did not.
+
+        Raises:
+            BackendError: If the daemon cannot be asked.
+        """
+        stream = None
+        lines: list[str] = []
+        error: str | None = None
+        with self._guard("Probing the classic builder"):
+            try:
+                stream = self._client.api.build(
+                    fileobj=io.BytesIO(b"FROM scratch\n"),
+                    rm=True,
+                    forcerm=True,
+                    decode=True,
+                )
+                for chunk in stream:
+                    if "stream" in chunk:
+                        lines.append(str(chunk["stream"]))
+                    error = _stream_error(chunk)
+                    if error is not None:
+                        break
+            except self._errors.APIError as exc:
+                return False, _daemon_message(exc)
+            finally:
+                _close(stream)
+        if any(line.startswith("Step 1/") for line in lines):
+            return True, None
+        return False, error or "no classic-builder output"
+
+    def list_managed(self) -> tuple[ManagedContainer, ...]:
+        """List containers carrying the managed-container label.
+
+        Raises:
+            BackendError: If the daemon rejects the request.
+            BackendUnavailableError: If the daemon is unreachable.
+        """
+        label = f"{MANAGED_LABEL}={MANAGED_LABEL_VALUE}"
+        with self._guard("Listing containers"):
+            found = self._client.containers.list(
+                all=True, filters={"label": label}
+            )
+        containers = []
+        for container in found:
+            attrs = getattr(container, "attrs", None) or {}
+            config = attrs.get("Config") or {}
+            containers.append(
+                ManagedContainer(
+                    id=container.id,
+                    name=container.name,
+                    image=str(config.get("Image") or ""),
+                    state=container.status,
+                    created=_parse_created(attrs.get("Created")),
+                )
+            )
+        return tuple(containers)

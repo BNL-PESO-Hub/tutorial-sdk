@@ -13,13 +13,33 @@ objects) may leak through this interface.
 
 from __future__ import annotations
 
+import signal
+import threading
 import time
+from contextlib import contextmanager
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
-from typing import Callable, Iterator, Protocol, runtime_checkable
+from typing import Any, Callable, Iterator, Protocol, runtime_checkable
 
 #: Callback invoked with each build or push log line as it is produced.
 LogCallback = Callable[[str], None]
+
+#: Label key marking containers started by tutorial-sdk foreground runs
+#: (``tutorial-sdk run``), on every backend.  ``tutorial-sdk doctor``
+#: lists containers by this label; it marks ownership, not that a
+#: container is orphaned.
+MANAGED_LABEL = "org.bnl-peso-hub.tutorial-sdk.managed"
+
+#: Value of :data:`MANAGED_LABEL`.
+MANAGED_LABEL_VALUE = "true"
+
+#: Seconds a foreground container may take to exit after an interrupt
+#: before it is force-removed (the ``docker stop`` default).
+STOP_GRACE = 10.0
+
+#: Printed to stderr when a foreground run is first interrupted.
+STOP_HINT = "Stopping container (interrupt again to force)..."
 
 
 @dataclass(frozen=True)
@@ -77,6 +97,58 @@ class RunExit:
     image: str
     command: tuple[str, ...]
     returncode: int
+
+
+@dataclass(frozen=True)
+class ManagedContainer:
+    """A container carrying the :data:`MANAGED_LABEL` label.
+
+    ``state`` is the Docker state (``running``, ``exited``,
+    ``created``, ...); ``created`` is ``None`` when the creation time
+    cannot be parsed.
+    """
+
+    id: str
+    name: str
+    image: str
+    state: str
+    created: datetime | None = None
+
+
+@dataclass(frozen=True)
+class BackendInfo:
+    """Diagnostic description of a backend and the daemon it uses.
+
+    Not part of the ``ContainerBackend`` protocol: ``DockerCliBackend``
+    and ``DockerSdkBackend`` provide it through ``describe()`` for
+    ``tutorial-sdk doctor``.
+
+    Attributes:
+        name: Backend name.
+        client_version: Docker CLI version (``docker-cli``) or
+            docker-py version (``docker-sdk``).
+        server_version: Docker Engine version, if the daemon answered.
+        api_version: Engine API version, if the daemon answered.
+        endpoint: Daemon address the backend talks to, if known.
+        endpoint_source: Where ``endpoint`` comes from
+            (``DOCKER_HOST``, ``context <name>``, ``default``).
+        daemon_error: Why the daemon could not be queried, if it
+            could not.
+        classic_builder: Whether the Engine API build endpoint still
+            runs the classic builder (``docker-sdk`` only; ``None``
+            when not probed).
+        notes: Further remarks (probe failures and the like).
+    """
+
+    name: str
+    client_version: str | None = None
+    server_version: str | None = None
+    api_version: str | None = None
+    endpoint: str | None = None
+    endpoint_source: str | None = None
+    daemon_error: str | None = None
+    classic_builder: bool | None = None
+    notes: tuple[str, ...] = ()
 
 
 @runtime_checkable
@@ -238,9 +310,13 @@ class ContainerBackend(Protocol):
         The container's stdout and stderr go to the caller's stdout
         and stderr, and the container is removed on exit, including
         after an interrupt (``--rm`` semantics).  Interrupting the run
-        (SIGINT/SIGTERM) asks the container to stop; whether the
+        (SIGINT; the ``docker-sdk`` backend also handles SIGTERM) asks
+        the container to stop; a container still
+        running :data:`STOP_GRACE` seconds later, or when the run is
+        interrupted again, is killed and removed.  Whether the
         interrupt then propagates or the exit code is returned is
-        backend-specific.
+        backend-specific.  Foreground containers carry the
+        :data:`MANAGED_LABEL` label.
 
         Args:
             image: Image tag to run.
@@ -310,3 +386,42 @@ def observe_running(
         if remaining <= 0:
             return True
         time.sleep(min(poll, remaining))
+
+
+@contextmanager
+def trap_signals(signums: tuple[int, ...]) -> Iterator[list[int]]:
+    """Record the given signals instead of acting on them, for the duration.
+
+    Shared by the backends' foreground runs.  Yields the list the
+    received signal numbers are appended to.  The handler only
+    records, so a signal can never interrupt a run half-way through a
+    step; the caller polls the list instead.
+
+    Handlers can only be installed from the main thread; elsewhere
+    nothing is installed (signals are delivered to the main thread
+    only).  Signals the process ignores (``SIG_IGN``) or whose handler
+    was not installed from Python are left alone.  Previous handlers
+    are restored on exit.
+
+    Args:
+        signums: Signal numbers to record.
+    """
+    received: list[int] = []
+    if threading.current_thread() is not threading.main_thread():
+        yield received
+        return
+
+    def _record(signum: int, frame: Any) -> None:
+        received.append(signum)
+
+    previous = {}
+    try:
+        for signum in signums:
+            handler = signal.getsignal(signum)
+            if handler is not None and handler is not signal.SIG_IGN:
+                previous[signum] = handler
+                signal.signal(signum, _record)
+        yield received
+    finally:
+        for signum, handler in previous.items():
+            signal.signal(signum, handler)

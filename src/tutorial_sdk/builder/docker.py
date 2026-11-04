@@ -3,7 +3,7 @@
 from dataclasses import dataclass
 from pathlib import Path
 
-from ..backend import ContainerBackend, get_backend
+from ..backend import ContainerBackend, LogCallback, get_backend
 from ..errors import BackendError, BuildError
 from ..spec import TutorialSpec
 
@@ -49,6 +49,7 @@ class DockerBuilder:
         image: str | None = None,
         no_cache: bool | None = None,
         platform: str | None = None,
+        log_callback: LogCallback | None = None,
     ) -> BuildResult:
         """Build the tutorial image.
 
@@ -58,6 +59,11 @@ class DockerBuilder:
                 caching.
             platform: Target platform (e.g.
                 ``linux/amd64``).
+            log_callback: Optional sink receiving each build output
+                line as it is produced.  Without it the build is
+                silent and a failure's ``BuildError`` message carries
+                the build output; with it the output has already been
+                shown and the message is short.
 
         Returns:
             A ``BuildResult`` on success.
@@ -87,6 +93,7 @@ class DockerBuilder:
                 tag=image,
                 no_cache=not cache_enabled,
                 platform=platform,
+                log_callback=log_callback,
             )
         except BackendError as exc:
             # Covers ImageBuildFailed and BackendUnavailableError.

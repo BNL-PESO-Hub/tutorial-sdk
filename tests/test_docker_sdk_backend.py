@@ -31,6 +31,8 @@ from tutorial_sdk.backend import (  # noqa: E402
 )
 from tutorial_sdk.backend import docker_sdk  # noqa: E402
 from tutorial_sdk.backend.base import (  # noqa: E402
+    MANAGED_LABEL,
+    MANAGED_LABEL_VALUE,
     ContainerHandle,
     ImageBuildResult,
     ImagePushResult,
@@ -53,6 +55,8 @@ from tutorial_sdk.validator.container import (  # noqa: E402
 )
 
 from .mock_backend import make_spec  # noqa: E402
+
+MANAGED = {MANAGED_LABEL: MANAGED_LABEL_VALUE}
 
 # ---------------------------------------------------------------------------
 # Mock docker client
@@ -190,6 +194,8 @@ class MockContainers:
         self.create_errors = []
         self.created = None
         self.prepare = None  # callable scripting each created container
+        self.listed = []
+        self.list_calls = []
 
     def add(self, container):
         self.by_key[container.id] = container
@@ -210,6 +216,12 @@ class MockContainers:
             raise self.run_error
         name = kwargs.get("name") or "random_name"
         return self.add(MockContainer(self.next_id, name, status="created"))
+
+    def list(self, **kwargs):
+        self.list_calls.append(kwargs)
+        if self.get_error is not None:
+            raise self.get_error
+        return list(self.listed)
 
     def create(self, image, **kwargs):
         self.create_calls.append((image, kwargs))
@@ -295,6 +307,12 @@ class MockClient:
         self.images = MockImages()
         self.api = MockApi()
         self.ping_error = None
+        self.version_error = None
+
+    def version(self):
+        if self.version_error is not None:
+            raise self.version_error
+        return {"Version": "29.9.1", "ApiVersion": "1.56", "Os": "linux"}
 
     def ping(self):
         if self.ping_error is not None:
@@ -641,7 +659,7 @@ def test_plain_foreground_run_does_not_delegate(backend, client):
     backend._cli = cli
     backend.run_foreground("t:1")
     cli.run_foreground.assert_not_called()
-    assert client.containers.create_calls == [("t:1", {})]
+    assert client.containers.create_calls == [("t:1", {"labels": MANAGED})]
 
 
 def test_delegation_without_binary_is_unavailable(backend, client, tmp_path):
@@ -725,7 +743,7 @@ def test_run_foreground_streams_and_returns_exit_code(backend, client, capsys):
         "img:1",
     )
     assert client.containers.create_calls == [
-        ("img:1", {"ports": {"8888/tcp": 9999}})
+        ("img:1", {"ports": {"8888/tcp": 9999}, "labels": MANAGED})
     ]
     captured = capsys.readouterr()
     assert captured.out == "hello\npartial"
@@ -1522,3 +1540,150 @@ def test_stream_logs_urllib3_errors_are_unavailable(backend, client):
     c.stream._chunks = broken()
     with pytest.raises(BackendUnavailableError):
         next(stream)
+
+
+# ---------------------------------------------------------------------------
+# Managed label and diagnostics
+# ---------------------------------------------------------------------------
+
+CLASSIC_PROBE = [
+    {"stream": "Step 1/1 : FROM scratch"},
+    {"stream": "\n"},
+    {"stream": " ---> \n"},
+    {
+        "error": "No image was generated. Is your Dockerfile empty?",
+        "errorDetail": {"message": "No image was generated."},
+    },
+]
+
+
+def test_foreground_container_carries_managed_label(backend, client):
+    backend.run_foreground("t:1", ports={80: 8080})
+    _, options = client.containers.create_calls[0]
+    assert options["labels"] == {MANAGED_LABEL: MANAGED_LABEL_VALUE}
+    assert options["ports"] == {"80/tcp": 8080}
+
+
+def test_detached_containers_are_not_labelled(backend, client):
+    backend.run_detached("t:1", name="v")
+    assert "labels" not in client.containers.run_calls[0][1]
+
+
+def test_describe_reports_daemon_and_classic_builder(backend, client):
+    client.api.build_chunks = CLASSIC_PROBE
+    info = backend.describe()
+    assert info.name == "docker-sdk"
+    assert info.client_version == docker.__version__
+    assert info.server_version == "29.9.1"
+    assert info.api_version == "1.56"
+    assert info.classic_builder is True
+    assert info.notes == ()
+    assert info.daemon_error is None
+    # The probe sends only ``FROM scratch`` and leaves nothing behind.
+    (call,) = client.api.build_calls
+    assert call["fileobj"].getvalue() == b"FROM scratch\n"
+    assert call["forcerm"] is True
+    assert client.api.streams[0].closed
+
+
+def test_describe_without_classic_builder(backend, client):
+    client.api.build_error = api_error("builder version 1 is not supported")
+    info = backend.describe()
+    assert info.classic_builder is False
+    assert info.notes == (
+        "classic builder: Error response from daemon: "
+        "builder version 1 is not supported",
+    )
+
+
+def test_describe_unrecognised_probe_output(backend, client):
+    client.api.build_chunks = [{"error": "something else"}]
+    info = backend.describe()
+    assert info.classic_builder is False
+    assert info.notes == ("classic builder: something else",)
+
+
+def test_describe_probe_losing_daemon(backend, client):
+    client.api.build_error = requests.exceptions.ConnectionError("gone")
+    info = backend.describe()
+    assert info.classic_builder is None
+    assert info.notes[0].startswith("classic builder: probe failed:")
+
+
+def test_describe_daemon_unreachable(backend, client):
+    client.version_error = requests.exceptions.ConnectionError("refused")
+    info = backend.describe()
+    assert info.daemon_error == "refused"
+    assert info.server_version is None
+    assert info.classic_builder is None
+
+
+def test_connect_records_endpoint_source(monkeypatch):
+    monkeypatch.setenv("DOCKER_HOST", "tcp://127.0.0.1:2375")
+    with mock.patch("docker.from_env", return_value=MockClient()):
+        backend = DockerSdkBackend()
+    info = backend.describe()
+    assert (info.endpoint, info.endpoint_source) == (
+        "tcp://127.0.0.1:2375",
+        "DOCKER_HOST",
+    )
+
+    monkeypatch.delenv("DOCKER_HOST")
+    with mock.patch("docker.from_env", return_value=MockClient()):
+        info = DockerSdkBackend().describe()
+    assert info.endpoint_source == "default"
+    assert info.endpoint.startswith(("unix://", "npipe://"))
+
+
+def test_connect_records_context_endpoint(monkeypatch):
+    monkeypatch.delenv("DOCKER_HOST", raising=False)
+    monkeypatch.setenv("DOCKER_CONTEXT", "colima")
+    sock = "unix:///Users/me/.colima/docker.sock"
+    with (
+        mock.patch(
+            "docker.from_env",
+            side_effect=docker.errors.DockerException("no default socket"),
+        ),
+        mock.patch(
+            "tutorial_sdk.backend.docker_sdk._context_host", return_value=sock
+        ),
+        mock.patch("docker.DockerClient", return_value=MockClient()),
+    ):
+        info = DockerSdkBackend().describe()
+    assert (info.endpoint, info.endpoint_source) == (sock, "context colima")
+
+
+def test_injected_client_has_no_known_endpoint(backend):
+    info = backend.describe()
+    assert info.endpoint is None
+    assert info.endpoint_source is None
+
+
+def test_list_managed(backend, client):
+    labelled = MockContainer("e" * 64, "quirky", status="running")
+    labelled.attrs = {
+        "Config": {"Image": "demo:latest"},
+        "Created": "2026-10-22T14:53:16.123456789Z",
+    }
+    odd = MockContainer("d" * 64, "odd", status="exited")
+    odd.attrs = {"Created": "yesterday"}
+    client.containers.listed = [labelled, odd]
+    found = backend.list_managed()
+    assert client.containers.list_calls == [
+        {
+            "all": True,
+            "filters": {"label": f"{MANAGED_LABEL}={MANAGED_LABEL_VALUE}"},
+        }
+    ]
+    assert [(c.id, c.name, c.image, c.state) for c in found] == [
+        ("e" * 64, "quirky", "demo:latest", "running"),
+        ("d" * 64, "odd", "", "exited"),
+    ]
+    assert found[0].created.isoformat() == "2026-10-22T14:53:16+00:00"
+    assert found[1].created is None
+
+
+def test_list_managed_daemon_loss(backend, client):
+    client.containers.get_error = requests.exceptions.ConnectionError("x")
+    with pytest.raises(BackendUnavailableError):
+        backend.list_managed()

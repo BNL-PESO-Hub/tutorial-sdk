@@ -63,6 +63,7 @@ class MockBackend:
         exec_result: ExecResult | None = None,
         logs_text: str = "boom",
         run_returncode: int = 0,
+        build_lines: tuple[str, ...] = (),
     ) -> None:
         self.build_error = build_error
         self.push_error = push_error
@@ -72,6 +73,8 @@ class MockBackend:
         self.exec_result = exec_result or ExecResult(0, "4.2.0")
         self.logs_text = logs_text
         self.run_returncode = run_returncode
+        self.build_lines = build_lines
+        self.build_callbacks: list = []
         self.calls: list[tuple] = []
 
     # -- protocol implementation ------------------------------------
@@ -92,6 +95,10 @@ class MockBackend:
         self.calls.append(
             ("build_image", context, dockerfile, tag, no_cache, platform)
         )
+        self.build_callbacks.append(log_callback)
+        if log_callback is not None:
+            for line in self.build_lines:
+                log_callback(line)
         if self.build_error is not None:
             raise ImageBuildFailed(self.build_error, logs=("l1", "l2"))
         return ImageBuildResult(image=tag, image_id="sha256:abc", logs=())

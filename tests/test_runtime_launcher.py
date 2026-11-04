@@ -8,12 +8,12 @@ from tutorial_sdk.runtime.launcher import (
 )
 
 
-@patch("subprocess.run")
+@patch("subprocess.Popen")
 def test_launcher_run_default(mock_run):
     spec = TutorialSpec(name="run-test")
     launcher = RuntimeLauncher(spec, root=".", backend=DockerCliBackend())
 
-    mock_run.return_value = MagicMock(returncode=0)
+    mock_run.return_value = MagicMock(**{"wait.return_value": 0})
     result = launcher.run()
 
     assert isinstance(result, RunResult)
@@ -31,24 +31,24 @@ def test_launcher_run_default(mock_run):
     assert "--entrypoint" not in cmd
 
 
-@patch("subprocess.run")
+@patch("subprocess.Popen")
 def test_launcher_run_custom_port(mock_run):
     spec = TutorialSpec(name="port-test")
     launcher = RuntimeLauncher(spec, root=".", backend=DockerCliBackend())
 
-    mock_run.return_value = MagicMock(returncode=0)
+    mock_run.return_value = MagicMock(**{"wait.return_value": 0})
     launcher.run(port=9999)
 
     cmd = mock_run.call_args[0][0]
     assert "9999:8888" in cmd
 
 
-@patch("subprocess.run")
+@patch("subprocess.Popen")
 def test_launcher_run_shell_mode(mock_run):
     spec = TutorialSpec(name="shell-test")
     launcher = RuntimeLauncher(spec, root=".", backend=DockerCliBackend())
 
-    mock_run.return_value = MagicMock(returncode=0)
+    mock_run.return_value = MagicMock(**{"wait.return_value": 0})
     launcher.run(shell=True)
 
     cmd = mock_run.call_args[0][0]
@@ -59,7 +59,7 @@ def test_launcher_run_shell_mode(mock_run):
     assert cmd[-1] == "shell-test:latest"
 
 
-@patch("subprocess.run")
+@patch("subprocess.Popen")
 def test_launcher_run_with_custom_image(mock_run):
     spec = TutorialSpec(
         name="img-test",
@@ -67,7 +67,7 @@ def test_launcher_run_with_custom_image(mock_run):
     )
     launcher = RuntimeLauncher(spec, root=".", backend=DockerCliBackend())
 
-    mock_run.return_value = MagicMock(returncode=0)
+    mock_run.return_value = MagicMock(**{"wait.return_value": 0})
     result = launcher.run()
 
     assert result.image == "ghcr.io/org/tut:v1"
@@ -75,12 +75,12 @@ def test_launcher_run_with_custom_image(mock_run):
     assert "ghcr.io/org/tut:v1" in cmd
 
 
-@patch("subprocess.run")
+@patch("subprocess.Popen")
 def test_launcher_run_with_parameter_image(mock_run):
     spec = TutorialSpec(name="param-test")
     launcher = RuntimeLauncher(spec, root=".", backend=DockerCliBackend())
 
-    mock_run.return_value = MagicMock(returncode=0)
+    mock_run.return_value = MagicMock(**{"wait.return_value": 0})
     result = launcher.run(image="parameter-override:v3")
 
     assert result.image == "parameter-override:v3"

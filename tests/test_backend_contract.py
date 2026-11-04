@@ -17,13 +17,17 @@ registry can be had.
 
 from __future__ import annotations
 
+import fcntl
 import itertools
 import json
 import os
+import select
 import signal
 import socket
 import subprocess
 import sys
+import tempfile
+import termios
 import threading
 import time
 import urllib.error
@@ -34,6 +38,11 @@ from pathlib import Path
 import pytest
 
 from tutorial_sdk.backend import DockerCliBackend, get_backend
+from tutorial_sdk.backend.base import (
+    MANAGED_LABEL,
+    MANAGED_LABEL_VALUE,
+    STOP_GRACE,
+)
 from tutorial_sdk.backend.errors import (
     ContainerStartFailed,
     CopyFailed,
@@ -686,6 +695,250 @@ def test_sdk_stream_survives_silence_beyond_client_timeout(
 
 
 # ---------------------------------------------------------------------------
+# Foreground runs: interrupt cleanup, managed label, interactive shells
+# ---------------------------------------------------------------------------
+
+
+def _start_child(backend_name: str, image: str) -> subprocess.Popen:
+    """Start a foreground run in a child process in its own session."""
+    return subprocess.Popen(
+        [sys.executable, "-c", _CHILD, backend_name, image],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        start_new_session=True,
+    )
+
+
+def _finish_child(child: subprocess.Popen, timeout: float = 30):
+    try:
+        out, err = child.communicate(timeout=timeout)
+    finally:
+        if child.poll() is None:
+            child.kill()
+            child.communicate()
+    return child.returncode, out, err
+
+
+def _managed(image: str) -> list[str]:
+    """IDs of containers of ``image`` carrying the managed label."""
+    result = subprocess.run(
+        [
+            "docker",
+            "ps",
+            "-aq",
+            "--filter",
+            f"label={MANAGED_LABEL}={MANAGED_LABEL_VALUE}",
+            "--filter",
+            f"ancestor={image}",
+        ],
+        capture_output=True,
+        text=True,
+    )
+    return result.stdout.split()
+
+
+def _run_dirs() -> set[str]:
+    return {
+        p.name for p in Path(tempfile.gettempdir()).glob("tutorial-sdk-run-*")
+    }
+
+
+def test_run_foreground_reports_canonical_command(backend, images):
+    image = images["exiter"]
+    before = _run_dirs()
+    result = backend.run_foreground(image, ports={8888: _free_port()})
+    assert result.command[:3] == ("docker", "run", "--rm")
+    assert "--cidfile" not in result.command
+    assert "--label" not in result.command
+    assert result.command[-1] == image
+    assert _wait_until(lambda: not _containers_of(image))
+    assert _run_dirs() <= before  # the CID temp dir is gone
+
+
+def test_foreground_container_carries_managed_label(backend, images):
+    image = images["napper"]  # runs for 3 s
+    found: list[list[str]] = []
+    listed: list[list[str]] = []
+
+    def observe():
+        if _wait_until(lambda: _containers_of(image, running=True)):
+            found.append(_managed(image))
+            listed.append(
+                [c.id for c in backend.list_managed() if c.image == image]
+            )
+
+    watcher = threading.Thread(target=observe)
+    watcher.start()
+    result = backend.run_foreground(image)
+    watcher.join()
+    assert result.returncode == 0
+    assert len(found[0]) == 1  # selected by label alone, not by name
+    assert len(listed[0]) == 1 and listed[0][0].startswith(found[0][0])
+    assert _wait_until(lambda: not _containers_of(image))
+
+
+@pytest.fixture
+def cli_backend(images):
+    backend = DockerCliBackend()
+    if not backend.available():
+        pytest.skip("docker binary not on PATH")
+    return backend
+
+
+def test_cli_ctrl_c_removes_container_ignoring_sigint(cli_backend, images):
+    # ``sleep`` as PID 1 ignores SIGINT: before the fix the container
+    # kept running after Ctrl-C.  Now it is removed after the grace.
+    image = images["sleeper"]
+    child = _start_child(cli_backend.name, image)
+    assert _wait_until(lambda: _containers_of(image, running=True))
+    time.sleep(0.5)
+    began = time.monotonic()
+    os.killpg(child.pid, signal.SIGINT)
+    code, out, err = _finish_child(child)
+    elapsed = time.monotonic() - began
+    assert "KeyboardInterrupt" in err
+    assert "Stopping container (interrupt again to force)..." in err
+    assert "Warning" not in err
+    assert code != 0 and "RC" not in out
+    assert STOP_GRACE - 0.5 <= elapsed < STOP_GRACE + 10
+    assert _wait_until(lambda: not _containers_of(image)), "container leaked"
+
+
+def test_cli_second_ctrl_c_removes_container_at_once(cli_backend, images):
+    image = images["sleeper"]
+    began = time.monotonic()
+    code, out, err = _run_and_interrupt(cli_backend.name, image, signals=2)
+    assert "KeyboardInterrupt" in err
+    assert time.monotonic() - began < STOP_GRACE
+    assert _wait_until(lambda: not _containers_of(image), timeout=5)
+
+
+def test_cli_ctrl_c_during_startup_leaves_nothing(cli_backend, images):
+    # Interrupt before (or while) docker run creates the container.
+    image = images["sleeper"]
+    for delay in (0.0, 0.3, 0.6):
+        child = _start_child(cli_backend.name, image)
+        time.sleep(delay)
+        os.killpg(child.pid, signal.SIGINT)
+        code, out, err = _finish_child(child)
+        assert code != 0
+        assert "could not identify" not in err
+        assert _wait_until(lambda: not _containers_of(image)), (
+            f"container leaked (interrupt after {delay} s)"
+        )
+
+
+def test_cli_interrupting_one_run_spares_another(cli_backend, images):
+    image = images["sleeper"]
+    first = _start_child(cli_backend.name, image)
+    second = _start_child(cli_backend.name, image)
+    try:
+        assert _wait_until(
+            lambda: len(_containers_of(image, running=True)) == 2
+        )
+        survivors_before = set(_containers_of(image, running=True))
+        time.sleep(0.5)
+        os.killpg(first.pid, signal.SIGINT)
+        time.sleep(0.5)
+        os.killpg(first.pid, signal.SIGINT)
+        _finish_child(first)
+        assert _wait_until(lambda: len(_containers_of(image)) == 1)
+        assert set(_containers_of(image, running=True)) < survivors_before
+    finally:
+        for _ in range(2):
+            if second.poll() is None:
+                os.killpg(second.pid, signal.SIGINT)
+                time.sleep(0.5)
+        _finish_child(second)
+    assert _wait_until(lambda: not _containers_of(image))
+
+
+_SHELL_CHILD = (
+    "import sys\n"
+    "from tutorial_sdk.backend import get_backend\n"
+    "backend = get_backend(sys.argv[1])\n"
+    "result = backend.run_foreground(sys.argv[2], interactive_shell=True)\n"
+    "print('RC', result.returncode, flush=True)\n"
+)
+
+
+def _controlling_tty(slave: int):
+    def setup():
+        os.setsid()
+        fcntl.ioctl(slave, termios.TIOCSCTTY, 0)
+
+    return setup
+
+
+def test_interactive_shell_under_a_terminal(backend, images):
+    # A real pseudo-terminal that is the run's controlling terminal:
+    # the shell gets the TTY, Ctrl-C goes to it (not to Python), and
+    # the container is removed when the shell exits.
+    image = images["sleeper"]
+    master, slave = os.openpty()
+    child = subprocess.Popen(
+        [sys.executable, "-c", _SHELL_CHILD, backend.name, image],
+        stdin=slave,
+        stdout=slave,
+        stderr=slave,
+        preexec_fn=_controlling_tty(slave),
+    )
+    os.close(slave)
+    output = bytearray()
+
+    def read_until(token: bytes, timeout: float = 20.0) -> bool:
+        deadline = time.monotonic() + timeout
+        while token not in output and time.monotonic() < deadline:
+            ready, _, _ = select.select([master], [], [], 0.2)
+            if ready:
+                try:
+                    output.extend(os.read(master, 4096))
+                except OSError:  # child side closed
+                    break
+        return token in output
+
+    try:
+        assert _wait_until(lambda: _containers_of(image, running=True))
+        os.write(master, b"echo pty-$((40+2))\r")
+        assert read_until(b"pty-42"), output.decode(errors="replace")
+        os.write(master, b"\x03")  # Ctrl-C: for the shell, not Python
+        time.sleep(0.5)
+        os.write(master, b"exit 4\r")
+        assert read_until(b"RC 4"), output.decode(errors="replace")
+        assert child.wait(timeout=20) == 0
+    finally:
+        if child.poll() is None:
+            child.kill()
+            child.wait()
+        os.close(master)
+    assert b"KeyboardInterrupt" not in output
+    assert _wait_until(lambda: not _containers_of(image))
+
+
+# ---------------------------------------------------------------------------
+# doctor
+# ---------------------------------------------------------------------------
+
+
+def test_doctor_against_live_daemon(backend, images):
+    from tutorial_sdk.doctor import diagnose
+
+    report = diagnose(backend.name)
+    assert report.ok
+    assert report.selection.backend == backend.name
+    status = report.status(backend.name)
+    assert status.usable
+    assert status.info.server_version
+    assert status.info.api_version
+    assert status.info.endpoint_source
+    if backend.name == "docker-sdk":
+        # Engine 29 still serves the classic builder docker-py needs.
+        assert status.info.classic_builder in (True, False)
+    assert report.containers is not None
+
+
+# ---------------------------------------------------------------------------
 # Image push
 # ---------------------------------------------------------------------------
 
@@ -704,6 +957,8 @@ def _registry_ready(address: str) -> bool:
 def registry(images):
     """Address (``host:port``) of a registry the daemon can push to."""
     if REGISTRY:
+        if not _wait_until(lambda: _registry_ready(REGISTRY), timeout=30):
+            pytest.skip(f"registry at {REGISTRY} did not come up")
         yield REGISTRY
         return
     name = f"tsdk-ct-registry-{RUN_ID}"

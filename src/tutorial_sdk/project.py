@@ -3,7 +3,7 @@
 import json
 from pathlib import Path
 
-from .backend import ContainerBackend
+from .backend import ContainerBackend, LogCallback
 from .config import DEFAULT_CONFIG
 from .builder import BuildResult, LocalBuilder
 from .resolver import ResolvedTutorialProject, TutorialResolver
@@ -234,6 +234,7 @@ class TutorialProject:
         no_cache: bool | None = None,
         platform: str | None = None,
         backend: ContainerBackend | str | None = None,
+        log_callback: LogCallback | None = None,
     ) -> BuildResult:
         """Generate a Dockerfile and build the container image.
 
@@ -246,12 +247,20 @@ class TutorialProject:
             backend: Container backend instance or name.  A name
                 takes precedence over ``TUTORIAL_SDK_BACKEND`` and
                 ``build.backend``.
+            log_callback: Optional sink receiving each build output
+                line as it is produced; see
+                :meth:`DockerBuilder.build
+                <tutorial_sdk.builder.docker.DockerBuilder.build>`.
 
         Returns:
             A ``BuildResult`` with the image tag and
             Dockerfile path.
         """
 
+        # Forwarded only when given, keeping the historical call shape.
+        options = (
+            {"log_callback": log_callback} if log_callback is not None else {}
+        )
         return LocalBuilder(
             self.spec,
             self.root,
@@ -260,6 +269,7 @@ class TutorialProject:
             no_cache=no_cache,
             platform=platform,
             backend=backend,
+            **options,
         )
 
     def run(

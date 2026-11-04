@@ -350,3 +350,27 @@ def test_selection_precedence_end_to_end(
         monkeypatch.setenv("TUTORIAL_SDK_BACKEND", env)
     _project(tmp_path, config).build(backend=flag)
     assert chosen == [expected]
+
+
+def test_build_log_callback_reaches_backend(tmp_path):
+    from tutorial_sdk.builder.docker import DockerBuilder
+
+    backend = MockBackend(build_lines=("a", "b"))
+    seen = []
+    DockerBuilder(make_spec(), tmp_path, backend=backend).build(
+        log_callback=seen.append
+    )
+    assert seen == ["a", "b"]
+    DockerBuilder(make_spec(), tmp_path, backend=backend).build()
+    assert backend.build_callbacks[1] is None
+
+
+def test_project_build_forwards_log_callback(tmp_path):
+    from tutorial_sdk.project import TutorialProject
+
+    (tmp_path / "tutorial.yml").write_text("name: demo\n")
+    project = TutorialProject.load(tmp_path / "tutorial.yml")
+    backend = MockBackend(build_lines=("x",))
+    seen = []
+    project.build(backend=backend, log_callback=seen.append)
+    assert seen == ["x"]

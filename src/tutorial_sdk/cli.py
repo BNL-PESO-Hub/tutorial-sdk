@@ -29,6 +29,8 @@ _BACKEND_HELP = (
     "build.backend in the config)."
 )
 
+_BUILD_OUTPUT_HELP = "Print the image build output as it is produced."
+
 
 def main(argv: list[str] | None = None) -> int:
     """Run the CLI."""
@@ -132,6 +134,9 @@ def _build_parser() -> argparse.ArgumentParser:
     build.add_argument("--config", default=DEFAULT_CONFIG)
     build.add_argument("--image", default=None)
     build.add_argument("--platform", default=None)
+    build.add_argument(
+        "--build-output", action="store_true", help=_BUILD_OUTPUT_HELP
+    )
     _add_backend_argument(build)
     build.set_defaults(func=_build)
 
@@ -168,8 +173,34 @@ def _build_parser() -> argparse.ArgumentParser:
     ci.add_argument("--push", action="store_true")
     ci.add_argument("--strict", action="store_true")
     ci.add_argument("--no-cache", action="store_true")
+    ci.add_argument(
+        "--build-output", action="store_true", help=_BUILD_OUTPUT_HELP
+    )
     _add_backend_argument(ci)
     ci.set_defaults(func=_ci)
+
+    doctor = subparsers.add_parser(
+        "doctor",
+        help="Report the container backends available on this host.",
+    )
+    doctor.add_argument(
+        "--config",
+        default=None,
+        help=(
+            "Tutorial config whose build.backend takes part in the "
+            "selection, if the file exists (default: tutorial.yml)."
+        ),
+    )
+    doctor.add_argument(
+        "--backend",
+        choices=BACKEND_CHOICES,
+        default=None,
+        help="Evaluate the selection as if --backend were given.",
+    )
+    doctor.add_argument(
+        "--json", action="store_true", help="Print the report as JSON."
+    )
+    doctor.set_defaults(func=_doctor)
     return parser
 
 
@@ -339,12 +370,22 @@ def _build(args: argparse.Namespace) -> int:
         Exit code (``0``).
     """
 
+    options: dict[str, object] = {}
+    if args.build_output:
+        options["log_callback"] = _print_line
     _load_project(args.config).build(
         image=args.image,
         platform=args.platform,
         backend=args.backend,
+        **options,
     )
     return 0
+
+
+def _print_line(line: str) -> None:
+    """Print one line of build output immediately."""
+
+    print(line, flush=True)
 
 
 def _run(args: argparse.Namespace) -> int:
@@ -447,7 +488,7 @@ def _ci(args: argparse.Namespace) -> int:
     logs: list[str] = []
 
     def log(msg: str) -> None:
-        print(msg)
+        print(msg, flush=True)
         logs.append(msg)
 
     log("Starting tutorial-sdk CI workflow...")
@@ -491,10 +532,15 @@ def _ci(args: argparse.Namespace) -> int:
             # One backend for build, container validation, and push.
             backend = _ci_backend(args.backend, project)
             start_build = time.time()
+            options: dict[str, object] = {}
+            if args.build_output:
+                # Build lines also go to tutorial-sdk.log.
+                options["log_callback"] = log
             build_result = project.build(
                 image=args.image or None,
                 no_cache=args.no_cache,
                 backend=backend,
+                **options,
             )
             duration = time.time() - start_build
             log(f"Container built in {duration:.2f}s: {build_result.image}")
@@ -616,6 +662,34 @@ def _push_image(
         return False, None
     log(f"Image {image} pushed successfully.")
     return True, result.digest
+
+
+def _doctor(args: argparse.Namespace) -> int:
+    """Handle the ``doctor`` subcommand.
+
+    Prints which container backends are available, which one would
+    be selected and why, and the containers tutorial-sdk started.
+
+    Args:
+        args: Parsed CLI arguments.
+
+    Returns:
+        ``0`` if a backend is selected and reaches its daemon, ``1``
+        otherwise.
+    """
+
+    import json
+
+    from .doctor import diagnose
+
+    if args.config is not None and not Path(args.config).is_file():
+        raise ConfigError(f"Tutorial specification not found: {args.config}")
+    report = diagnose(args.backend, config=args.config or DEFAULT_CONFIG)
+    if args.json:
+        print(json.dumps(report.to_dict(), indent=2))
+    else:
+        print(report.render_text(), end="")
+    return 0 if report.ok else 1
 
 
 def _emit_github_output(

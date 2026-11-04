@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from ..backend import ContainerBackend
+from ..backend import ContainerBackend, LogCallback
 from .docker import BuildResult, DockerBuilder
 from ..generator import (
     DevcontainerGenerator,
@@ -100,6 +100,7 @@ class LocalBuilder:
         no_cache: bool | None = None,
         platform: str | None = None,
         backend: ContainerBackend | str | None = None,
+        log_callback: LogCallback | None = None,
     ) -> BuildResult:
         """Prepare artifacts and run Docker build.
 
@@ -110,12 +111,18 @@ class LocalBuilder:
             platform: Target platform.
             backend: Container backend instance or name; see
                 :class:`DockerBuilder`.
+            log_callback: Optional sink for build output lines; see
+                :meth:`DockerBuilder.build`.
 
         Returns:
             A ``BuildResult`` from Docker.
         """
 
         self.prepare()
+        # Forwarded only when given, keeping the historical call shape.
+        options = (
+            {"log_callback": log_callback} if log_callback is not None else {}
+        )
         return DockerBuilder(self.spec, self.root, backend=backend).build(
-            image=image, no_cache=no_cache, platform=platform
+            image=image, no_cache=no_cache, platform=platform, **options
         )

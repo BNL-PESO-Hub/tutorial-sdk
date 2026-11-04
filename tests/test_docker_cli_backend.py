@@ -6,15 +6,23 @@ modules is behavior-preserving — without needing a daemon.
 """
 
 import os
+import signal
 import subprocess
+import threading
+import time
 import types
 from pathlib import Path
 from unittest import mock
 
 import pytest
 
-from tutorial_sdk.backend import DockerCliBackend, get_backend
-from tutorial_sdk.backend.base import ContainerHandle, ImagePushResult
+from tutorial_sdk.backend import DockerCliBackend, docker_cli, get_backend
+from tutorial_sdk.backend.base import (
+    MANAGED_LABEL,
+    MANAGED_LABEL_VALUE,
+    ContainerHandle,
+    ImagePushResult,
+)
 from tutorial_sdk.backend.errors import (
     ContainerStartFailed,
     CopyFailed,
@@ -37,6 +45,27 @@ def completed(returncode=0, stdout="", stderr=""):
 
 def handle(name="c1"):
     return ContainerHandle(id="cid", name=name, backend="docker-cli")
+
+
+class MockProcess:
+    """Stand-in for the ``docker run`` client of a foreground run."""
+
+    def __init__(self, returncode=0):
+        self._exit_code = returncode
+        self.returncode = None
+        self.kills = 0
+
+    def wait(self, timeout=None):
+        if self.returncode is None:
+            self.returncode = self._exit_code
+        return self.returncode
+
+    def poll(self):
+        return self.returncode
+
+    def kill(self):
+        self.kills += 1
+        self.returncode = -9
 
 
 # ---------------------------------------------------------------------------
@@ -200,20 +229,26 @@ def test_remove_forces_by_default():
 
 def test_run_foreground_command_shape():
     backend = DockerCliBackend()
-    with mock.patch(
-        "subprocess.run", return_value=completed(returncode=0)
-    ) as run:
+    process = MockProcess()
+    with mock.patch("subprocess.Popen", return_value=process) as popen:
         exit_info = backend.run_foreground("demo:latest", ports={8888: 9999})
-    assert run.call_args.args[0] == [
+    executed = popen.call_args.args[0]
+    cidfile = executed[executed.index("--cidfile") + 1]
+    assert executed == [
         "docker",
         "run",
         "--rm",
+        "--cidfile",
+        cidfile,
+        "--label",
+        f"{MANAGED_LABEL}={MANAGED_LABEL_VALUE}",
         "-p",
         "9999:8888",
         "demo:latest",
     ]
-    # Foreground runs must inherit host streams: capture_output is False.
-    assert run.call_args.kwargs.get("capture_output", False) is False
+    # Foreground runs must inherit host streams: nothing is redirected.
+    assert popen.call_args.kwargs == {}
+    # The reported command is the canonical one, without bookkeeping.
     assert exit_info.command == (
         "docker",
         "run",
@@ -223,13 +258,24 @@ def test_run_foreground_command_shape():
         "demo:latest",
     )
 
-    with mock.patch(
-        "subprocess.run", return_value=completed(returncode=0)
-    ) as run:
-        backend.run_foreground(
+    process = MockProcess()
+    with mock.patch("subprocess.Popen", return_value=process) as popen:
+        exit_info = backend.run_foreground(
             "demo:latest", ports={8888: 8888}, interactive_shell=True
         )
-    assert run.call_args.args[0] == [
+    executed = popen.call_args.args[0]
+    assert executed[:4] == ["docker", "run", "--rm", "--cidfile"]
+    assert executed[5:] == [
+        "--label",
+        f"{MANAGED_LABEL}={MANAGED_LABEL_VALUE}",
+        "-p",
+        "8888:8888",
+        "-it",
+        "--entrypoint",
+        "/bin/sh",
+        "demo:latest",
+    ]
+    assert exit_info.command == (
         "docker",
         "run",
         "--rm",
@@ -239,7 +285,7 @@ def test_run_foreground_command_shape():
         "--entrypoint",
         "/bin/sh",
         "demo:latest",
-    ]
+    )
 
 
 def test_copy_in_command():
@@ -572,3 +618,508 @@ def test_push_missing_docker_binary_maps_to_unavailable():
     with mock.patch("subprocess.run", side_effect=FileNotFoundError):
         with pytest.raises(BackendUnavailableError):
             DockerCliBackend().push_image("demo:1")
+
+
+# ---------------------------------------------------------------------------
+# Foreground runs: interrupt handling and cleanup
+# ---------------------------------------------------------------------------
+
+CID = "a" * 64
+
+
+class ScriptedProcess:
+    """``docker run`` client whose life is scripted per ``wait`` call.
+
+    ``script`` is called on every ``wait`` with the call number and may
+    send signals or end the process by returning an exit code.
+    Removing the container with ``docker rm -f`` ends the process with
+    137, as it does for a real ``docker run``.
+    """
+
+    def __init__(self, script=None, cid=CID):
+        self.script = script or (lambda n: None)
+        self.cid = cid
+        self.returncode = None
+        self.kills = 0
+        self.calls = 0
+        self.cidfile = None
+
+    def spawned(self, command):
+        self.command = command
+        self.cidfile = Path(command[command.index("--cidfile") + 1])
+        assert not self.cidfile.exists()  # docker must create it
+        if self.cid is not None:
+            self.cidfile.write_text(self.cid)
+        return self
+
+    def wait(self, timeout=None):
+        if self.returncode is None:
+            self.calls += 1
+            code = self.script(self.calls)
+            if code is not None:
+                self.returncode = code
+        if self.returncode is not None:
+            return self.returncode
+        if timeout is None:
+            raise AssertionError("blocking wait on a live process")
+        time.sleep(min(timeout, 0.01))
+        raise subprocess.TimeoutExpired("docker", timeout)
+
+    def poll(self):
+        return self.returncode
+
+    def kill(self):
+        self.kills += 1
+        self.returncode = -9
+
+
+def interrupt_at(*calls, exit_at=None, code=130):
+    """Script sending SIGINT to this process at the given ``wait`` calls."""
+
+    def script(n):
+        if n in calls:
+            os.kill(os.getpid(), signal.SIGINT)
+        if exit_at is not None and n >= exit_at:
+            return code
+        return None
+
+    return script
+
+
+@pytest.fixture
+def fast(monkeypatch):
+    """Shrink the stop policy's timings."""
+    monkeypatch.setattr(docker_cli, "STOP_GRACE", 0.3)
+    monkeypatch.setattr(docker_cli, "_CID_TIMEOUT", 0.2)
+    monkeypatch.setattr(docker_cli, "_REAP_TIMEOUT", 0.2)
+    monkeypatch.setattr(docker_cli, "_POLL_INTERVAL", 0.01)
+
+
+def run_scripted(process, rm_result=None, image="demo:latest"):
+    """Run a foreground run against ``process``; record docker commands."""
+    commands = []
+
+    def mock_run(command, **kwargs):
+        commands.append((command, kwargs))
+        if command[:3] == ["docker", "rm", "-f"]:
+            if process.returncode is None:
+                process.returncode = 137
+            return rm_result or completed()
+        return completed()
+
+    backend = DockerCliBackend()
+    with (
+        mock.patch("subprocess.Popen", side_effect=process.spawned),
+        mock.patch("subprocess.run", side_effect=mock_run),
+    ):
+        result = backend.run_foreground(image)
+    return result, commands
+
+
+def test_tracked_command_inserts_bookkeeping_after_rm():
+    command = docker_cli.foreground_command("img", {80: 8080}, True)
+    tracked = docker_cli.tracked_command(command, Path("/x/cid"))
+    assert tracked == [
+        "docker",
+        "run",
+        "--rm",
+        "--cidfile",
+        "/x/cid",
+        "--label",
+        f"{MANAGED_LABEL}={MANAGED_LABEL_VALUE}",
+        *command[3:],
+    ]
+    assert tracked[-1] == "img"
+    with pytest.raises(ValueError):
+        docker_cli.tracked_command(["docker", "build", "."], Path("/x"))
+
+
+def test_normal_exit_returns_code_and_cleans_up(fast, capsys):
+    process = ScriptedProcess(lambda n: 3 if n >= 2 else None)
+    result, commands = run_scripted(process)
+    assert result.returncode == 3
+    assert commands == []  # --rm handles removal; no docker rm
+    assert not process.cidfile.parent.exists()  # temp dir removed
+    assert capsys.readouterr().err == ""
+
+
+def test_each_run_gets_its_own_cidfile(fast):
+    first, second = ScriptedProcess(lambda n: 0), ScriptedProcess(lambda n: 0)
+    run_scripted(first)
+    run_scripted(second)
+    assert first.cidfile != second.cidfile
+
+
+def test_interrupt_then_graceful_exit(fast, capsys):
+    # Ctrl-C reaches the client; the container stops by itself.
+    process = ScriptedProcess(interrupt_at(2, exit_at=4))
+    with pytest.raises(KeyboardInterrupt):
+        run_scripted(process)
+    err = capsys.readouterr().err
+    assert "Stopping container (interrupt again to force)..." in err
+    assert "Warning" not in err
+    assert process.kills == 0
+
+
+def test_interrupt_safety_net_removes_container_quietly(fast, capsys):
+    process = ScriptedProcess(interrupt_at(2, exit_at=3))
+    commands = []
+
+    def mock_run(command, **kwargs):
+        commands.append((command, kwargs))
+        return completed(
+            returncode=1,
+            stderr=f"Error response from daemon: No such container: {CID}",
+        )
+
+    backend = DockerCliBackend()
+    with (
+        mock.patch("subprocess.Popen", side_effect=process.spawned),
+        mock.patch("subprocess.run", side_effect=mock_run),
+        pytest.raises(KeyboardInterrupt),
+    ):
+        backend.run_foreground("demo:latest")
+    # The end-of-run safety net removes by ID, in its own session so a
+    # further Ctrl-C cannot kill it; "No such container" is success.
+    assert commands == [
+        (
+            ["docker", "rm", "-f", CID],
+            {
+                "check": False,
+                "capture_output": True,
+                "text": True,
+                "start_new_session": True,
+                "timeout": docker_cli._RM_TIMEOUT,
+            },
+        )
+    ]
+    assert "Warning" not in capsys.readouterr().err
+
+
+def test_container_ignoring_interrupt_is_removed_after_grace(fast, capsys):
+    process = ScriptedProcess(interrupt_at(2))
+    began = time.monotonic()
+    with pytest.raises(KeyboardInterrupt):
+        run_scripted(process)
+    assert time.monotonic() - began >= docker_cli.STOP_GRACE
+    assert process.returncode == 137  # ended by the removal
+    assert process.kills == 0
+    assert "Stopping container" in capsys.readouterr().err
+
+
+def test_second_interrupt_removes_at_once(fast, monkeypatch):
+    monkeypatch.setattr(docker_cli, "STOP_GRACE", 30.0)
+    process = ScriptedProcess(interrupt_at(2, 4))
+    began = time.monotonic()
+    with pytest.raises(KeyboardInterrupt):
+        run_scripted(process)
+    assert time.monotonic() - began < 5
+    assert process.returncode == 137
+
+
+def test_removal_commands_target_the_cid(fast):
+    process = ScriptedProcess(interrupt_at(2, 3))
+    issued = []
+
+    def mock_run(command, **kwargs):
+        issued.append(command)
+        if command[:3] == ["docker", "rm", "-f"] and process.returncode is None:
+            process.returncode = 137
+        return completed()
+
+    with (
+        mock.patch("subprocess.Popen", side_effect=process.spawned),
+        mock.patch("subprocess.run", side_effect=mock_run),
+        pytest.raises(KeyboardInterrupt),
+    ):
+        DockerCliBackend().run_foreground("demo:latest")
+    assert issued == [["docker", "rm", "-f", CID]]  # removed once
+
+
+def test_removal_failure_is_reported(fast, capsys):
+    process = ScriptedProcess(interrupt_at(2, 3, exit_at=8))
+    with pytest.raises(KeyboardInterrupt):
+        run_scripted(
+            process,
+            rm_result=completed(returncode=1, stderr="daemon exploded"),
+        )
+    err = capsys.readouterr().err
+    assert f"Warning: could not remove container {CID}: daemon exploded" in err
+
+
+def test_unknown_cid_is_reported_and_client_reaped(fast, capsys):
+    # docker run never wrote its ID (e.g. still pulling the image).
+    process = ScriptedProcess(interrupt_at(2, 3), cid=None)
+    with pytest.raises(KeyboardInterrupt):
+        run_scripted(process)
+    err = capsys.readouterr().err
+    assert "could not identify the container" in err
+    assert process.kills == 1  # not left running
+
+
+@pytest.mark.parametrize("content", ["", "not-an-id\n", "abc", "a" * 65])
+def test_invalid_cid_counts_as_unknown(tmp_path, content):
+    cidfile = tmp_path / "cid"
+    cidfile.write_text(content)
+    assert docker_cli._read_cid(cidfile) is None
+    assert docker_cli._read_cid(tmp_path / "missing") is None
+    cidfile.write_text(CID + "\n")
+    assert docker_cli._read_cid(cidfile) == CID
+
+
+def test_client_exiting_without_cid_after_interrupt_is_quiet(fast, capsys):
+    # Interrupted before any container existed: nothing to clean up.
+    process = ScriptedProcess(interrupt_at(1, exit_at=2), cid=None)
+    with pytest.raises(KeyboardInterrupt):
+        run_scripted(process)
+    assert "Warning" not in capsys.readouterr().err
+
+
+def test_interrupt_goes_to_previous_handler(fast):
+    seen = []
+    previous = signal.signal(signal.SIGINT, lambda s, f: seen.append(s))
+    try:
+        process = ScriptedProcess(interrupt_at(2, exit_at=3, code=0))
+        result, _ = run_scripted(process)
+        handler_after = signal.getsignal(signal.SIGINT)
+    finally:
+        signal.signal(signal.SIGINT, previous)
+    # Recorded during the run, re-delivered once afterwards.
+    assert seen == [signal.SIGINT]
+    assert result.returncode == 0
+    assert handler_after is not None and handler_after is not previous
+
+
+def test_default_handler_is_restored(fast):
+    before = signal.getsignal(signal.SIGINT)
+    run_scripted(ScriptedProcess(lambda n: 0))
+    assert signal.getsignal(signal.SIGINT) is before
+
+
+def test_ignored_sigint_stays_ignored(fast):
+    previous = signal.signal(signal.SIGINT, signal.SIG_IGN)
+    try:
+        process = ScriptedProcess(interrupt_at(2, exit_at=3, code=0))
+        result, commands = run_scripted(process)
+        assert signal.getsignal(signal.SIGINT) is signal.SIG_IGN
+    finally:
+        signal.signal(signal.SIGINT, previous)
+    assert result.returncode == 0
+    assert commands == []
+
+
+def test_run_from_worker_thread(fast):
+    results = []
+
+    def worker():
+        results.append(run_scripted(ScriptedProcess(lambda n: 5))[0])
+
+    thread = threading.Thread(target=worker)
+    thread.start()
+    thread.join(5)
+    assert results[0].returncode == 5
+
+
+def test_unexpected_error_kills_client(fast):
+    process = ScriptedProcess()
+
+    def broken_wait(timeout=None):
+        raise RuntimeError("boom")
+
+    process.wait = broken_wait
+    final_waits = []
+    process_kill = process.kill
+
+    def kill():
+        process_kill()
+        process.wait = lambda timeout=None: final_waits.append(1) or -9
+
+    process.kill = kill
+    with pytest.raises(RuntimeError, match="boom"):
+        run_scripted(process)
+    assert process.returncode == -9
+    assert final_waits == [1]
+
+
+def test_missing_binary_is_unavailable():
+    with (
+        mock.patch("subprocess.Popen", side_effect=FileNotFoundError("docker")),
+        pytest.raises(BackendUnavailableError),
+    ):
+        DockerCliBackend().run_foreground("demo:latest")
+
+
+# ---------------------------------------------------------------------------
+# Diagnostics
+# ---------------------------------------------------------------------------
+
+VERSION_JSON = (
+    '{"Client":{"Version":"29.9.1","ApiVersion":"1.56"},'
+    '"Server":{"Version":"29.9.1","ApiVersion":"1.56"}}\n'
+)
+
+
+def diag_run(version=None, context=None):
+    def mock_run(command, **kwargs):
+        if command[:2] == ["docker", "version"]:
+            return version or completed(stdout=VERSION_JSON)
+        if command[:3] == ["docker", "context", "inspect"]:
+            return context or completed(
+                stdout="colima\tunix:///Users/me/.colima/docker.sock\n"
+            )
+        raise AssertionError(command)
+
+    return mock_run
+
+
+def test_describe_reports_versions_and_context(monkeypatch):
+    monkeypatch.delenv("DOCKER_HOST", raising=False)
+    with (
+        mock.patch("shutil.which", return_value="/usr/bin/docker"),
+        mock.patch("subprocess.run", side_effect=diag_run()) as run,
+    ):
+        info = DockerCliBackend().describe()
+    assert info.name == "docker-cli"
+    assert info.client_version == "29.9.1"
+    assert info.server_version == "29.9.1"
+    assert info.api_version == "1.56"
+    assert info.endpoint == "unix:///Users/me/.colima/docker.sock"
+    assert info.endpoint_source == "context colima"
+    assert info.daemon_error is None
+    assert info.classic_builder is None
+    assert run.call_args_list[0].args[0] == [
+        "docker",
+        "version",
+        "--format",
+        "{{json .}}",
+    ]
+
+
+def test_describe_prefers_docker_host(monkeypatch):
+    monkeypatch.setenv("DOCKER_HOST", "tcp://10.0.0.5:2375")
+    with (
+        mock.patch("shutil.which", return_value="/usr/bin/docker"),
+        mock.patch("subprocess.run", side_effect=diag_run()) as run,
+    ):
+        info = DockerCliBackend().describe()
+    # DOCKER_HOST overrides any context, so none is inspected.
+    assert [c.args[0][1] for c in run.call_args_list] == ["version"]
+    assert info.endpoint == "tcp://10.0.0.5:2375"
+    assert info.endpoint_source == "DOCKER_HOST"
+
+
+def test_describe_daemon_down(monkeypatch):
+    monkeypatch.delenv("DOCKER_HOST", raising=False)
+    down = completed(
+        returncode=1,
+        stdout='{"Client":{"Version":"29.9.1"},"Server":null}\n',
+        stderr="Cannot connect to the Docker daemon at unix:///var/run/docker.sock.",
+    )
+    with (
+        mock.patch("shutil.which", return_value="/usr/bin/docker"),
+        mock.patch("subprocess.run", side_effect=diag_run(version=down)),
+    ):
+        info = DockerCliBackend().describe()
+    assert info.client_version == "29.9.1"
+    assert info.server_version is None
+    assert info.daemon_error.startswith("Cannot connect")
+
+
+def test_describe_without_binary():
+    with mock.patch("shutil.which", return_value=None):
+        info = DockerCliBackend().describe()
+    assert info.daemon_error == "Docker is not installed or not on PATH."
+    assert info.client_version is None
+
+
+def test_list_managed_filters_by_label():
+    out = (
+        f"{CID}\tquirky_name\tdemo:latest\trunning\t"
+        "2026-10-22 14:53:16 +0000 UTC\n"
+        f"{'b' * 64}\tother\tdemo:old\texited\tgarbage\n"
+        "malformed line\n"
+    )
+    with mock.patch(
+        "subprocess.run", return_value=completed(stdout=out)
+    ) as run:
+        found = DockerCliBackend().list_managed()
+    command = run.call_args.args[0]
+    assert command[:3] == ["docker", "ps", "--all"]
+    assert f"label={MANAGED_LABEL}={MANAGED_LABEL_VALUE}" in command
+    assert [c.id for c in found] == [CID, "b" * 64]
+    assert found[0].name == "quirky_name"
+    assert found[0].image == "demo:latest"
+    assert found[0].state == "running"
+    assert found[0].created.isoformat() == "2026-10-22T14:53:16+00:00"
+    assert found[1].created is None
+
+
+def test_list_managed_failure_raises():
+    with mock.patch(
+        "subprocess.run",
+        return_value=completed(returncode=1, stderr="permission denied"),
+    ):
+        with pytest.raises(BackendError, match="permission denied"):
+            DockerCliBackend().list_managed()
+
+
+def test_removal_without_binary_is_reported(fast, capsys):
+    process = ScriptedProcess(interrupt_at(2, 3, exit_at=8))
+
+    def mock_run(command, **kwargs):
+        raise FileNotFoundError("docker")
+
+    with (
+        mock.patch("subprocess.Popen", side_effect=process.spawned),
+        mock.patch("subprocess.run", side_effect=mock_run),
+        pytest.raises(KeyboardInterrupt),
+    ):
+        DockerCliBackend().run_foreground("demo:latest")
+    err = capsys.readouterr().err
+    assert f"Warning: could not remove container {CID}: Docker is not" in err
+
+
+def test_removal_timeout_is_reported(fast, capsys):
+    process = ScriptedProcess(interrupt_at(2, 3, exit_at=8))
+
+    def mock_run(command, **kwargs):
+        raise subprocess.TimeoutExpired(command, kwargs.get("timeout", 10.0))
+
+    with (
+        mock.patch("subprocess.Popen", side_effect=process.spawned),
+        mock.patch("subprocess.run", side_effect=mock_run),
+        pytest.raises(KeyboardInterrupt),
+    ):
+        DockerCliBackend().run_foreground("demo:latest")
+    err = capsys.readouterr().err
+    assert f"Warning: could not remove container {CID}: Command" in err
+
+
+def test_own_session_uses_process_group_on_windows(monkeypatch):
+    monkeypatch.setattr(docker_cli.sys, "platform", "win32")
+    with mock.patch("subprocess.run", return_value=completed()) as run:
+        DockerCliBackend()._run(["docker", "rm", "-f", CID], own_session=True)
+    kwargs = run.call_args.kwargs
+    assert "start_new_session" not in kwargs
+    assert kwargs["creationflags"] == getattr(
+        subprocess, "CREATE_NEW_PROCESS_GROUP", 0x00000200
+    )
+
+
+def test_describe_tolerates_garbage_and_vanishing_binary(monkeypatch):
+    monkeypatch.delenv("DOCKER_HOST", raising=False)
+    garbage = completed(returncode=0, stdout="not json\n")
+    with (
+        mock.patch("shutil.which", return_value="/usr/bin/docker"),
+        mock.patch("subprocess.run", side_effect=diag_run(version=garbage)),
+    ):
+        info = DockerCliBackend().describe()
+    assert info.client_version is None
+    assert info.daemon_error == "no response from daemon"
+
+    with (
+        mock.patch("shutil.which", return_value="/usr/bin/docker"),
+        mock.patch("subprocess.run", side_effect=FileNotFoundError("docker")),
+    ):
+        info = DockerCliBackend().describe()
+    assert info.daemon_error == "Docker is not installed or not on PATH."
