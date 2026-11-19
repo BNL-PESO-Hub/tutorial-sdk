@@ -34,6 +34,24 @@ jobs:
       - name: Ruff format
         run: ruff format --check src tests
 
+  docs:
+    name: Docs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0  # setuptools-scm derives the version from tags
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: Install
+        run: pip install -e ".[docs]"
+
+      - name: Build the documentation (warnings fail the build)
+        run: mkdocs build --strict
+
   unit:
     name: Unit (Python ${{ matrix.python }}, ${{ matrix.install }})
     runs-on: ubuntu-latest

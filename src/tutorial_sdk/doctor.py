@@ -5,7 +5,9 @@ host, which one a command would select (and which rule decided it),
 the Docker client, daemon, and endpoint each backend uses, whether the
 daemon still serves the classic builder that docker-py builds with,
 and the containers carrying tutorial-sdk's managed-container label.
-It is read-only: nothing is started, built, or removed.
+It changes nothing: no container is started and nothing is built or
+removed (for ``docker-sdk``, the classic-builder probe sends a
+``FROM scratch`` build request, which the builder rejects).
 """
 
 from __future__ import annotations
@@ -159,9 +161,11 @@ class DoctorReport:
                     f"  {container.id[:12]}  {container.state:<8} "
                     f"{age:>4}  {container.image}  {container.name}"
                 )
-            lines.append(
-                "  A listed container is not necessarily orphaned; remove "
-                "one with `docker rm -f <id>`."
+            lines.extend(
+                [
+                    "  A listed container is not necessarily orphaned",
+                    "  (remove one with `docker rm -f <id>`).",
+                ]
             )
         if self.notes:
             lines.append("")

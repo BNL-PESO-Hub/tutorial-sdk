@@ -388,6 +388,15 @@ def test_ci_validate_mode_needs_no_backend(tmp_path, monkeypatch):
     assert main(["ci", "--config", str(spec_path)]) == 0
 
 
+def test_ci_rejects_unknown_mode(tmp_path, capsys):
+    spec_path = _write_spec(tmp_path)
+    with pytest.raises(SystemExit) as info:
+        main(["ci", "--config", str(spec_path), "--mode", "deploy"])
+    assert info.value.code == 2
+    assert "invalid choice: 'deploy'" in capsys.readouterr().err
+    assert not (tmp_path / "tutorial-sdk.log").exists()
+
+
 # ---------------------------------------------------------------------------
 # --build-output
 # ---------------------------------------------------------------------------

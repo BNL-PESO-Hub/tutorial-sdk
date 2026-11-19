@@ -2,7 +2,10 @@
 
 Defines the ``ContainerBackend`` protocol that all execution
 backends implement, the small result dataclasses exchanged across
-that boundary, and the backend error hierarchy.
+that boundary, and the helpers and constants the backends share.
+The backend errors live in :mod:`tutorial_sdk.errors`
+(``BackendError``, ``BackendUnavailableError``) and
+:mod:`tutorial_sdk.backend.errors`.
 
 Higher layers (``DockerBuilder``, ``ContainerValidator``,
 ``RuntimeLauncher``) depend only on this module; concrete backends

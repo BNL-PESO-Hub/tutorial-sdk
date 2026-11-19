@@ -166,7 +166,11 @@ def _build_parser() -> argparse.ArgumentParser:
     scaffold.set_defaults(func=_scaffold)
 
     ci = subparsers.add_parser("ci")
-    ci.add_argument("--mode", default="validate")
+    ci.add_argument(
+        "--mode",
+        default="validate",
+        choices=("validate", "build", "test", "publish", "all"),
+    )
     ci.add_argument("--config", default=DEFAULT_CONFIG)
     ci.add_argument("--dockerfile", default="Dockerfile")
     ci.add_argument("--image", default="")

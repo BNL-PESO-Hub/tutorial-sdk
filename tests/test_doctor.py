@@ -249,7 +249,10 @@ def test_containers_listed_through_selected_backend(host):
     assert report.containers == (container,)
     text = report.render_text(NOW)
     assert "eeeeeeeeeeee  running    5m  demo:latest  quirky" in text
-    assert "not necessarily orphaned" in text
+    assert (
+        "  A listed container is not necessarily orphaned\n"
+        "  (remove one with `docker rm -f <id>`)."
+    ) in text
 
 
 def test_containers_listed_by_cli_when_selected(host):

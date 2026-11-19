@@ -1,4 +1,4 @@
-# Public API
+# Public API Reference
 
 ::: tutorial_sdk
     options:

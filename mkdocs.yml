@@ -76,6 +76,7 @@ plugins:
 
 markdown_extensions:
   - admonition
+  - md_in_html
   - pymdownx.superfences:
       custom_fences:
         - name: mermaid
@@ -89,6 +90,9 @@ extra_css:
 extra_javascript:
   - assets/javascripts/tables.js
 
+validation:
+  anchors: warn
+
 nav:
   - Home: index.md
   - Architecture: architecture.md
@@ -98,3 +102,5 @@ nav:
       - Usage Example: api-example.md
       - Public API: api-public.md
       - Full SDK API: api-package.md
+  - Development: development.md
+  - Troubleshooting: troubleshooting.md

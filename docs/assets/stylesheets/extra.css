@@ -124,6 +124,28 @@ h3 {
   background: var(--md-accent-fg-color);
 }
 
+/*
+ * Table column width & wrapping guidance:
+ * 1. Standard tables (e.g. Field / Type / Default / Description):
+ *    - Leading columns use `white-space: nowrap` and `width: 1%`
+ *      to stay compact.
+ *    - Only the last column (`:last-child`) wraps
+ *      (`white-space: normal; width: auto`).
+ * 2. Matrix / comparison tables (empty top-left header: `| | col1 | col2 |`):
+ *    - Matched automatically via `table:has(thead th:first-child:empty)`:
+ *      the first row-label column stays compact while
+ *      comparison columns wrap (`width: 50%`).
+ * 3. Opt-in wrapping for all columns after the first (`.wrap-table`):
+ *    - Wrap a Markdown table in `<div class="wrap-table" markdown>...</div>`
+ *      (requires `md_in_html` in `mkdocs.yml`) or attach
+ *      `.wrap-table` via `attr_list`.
+ *    - Use `.wrap-middle` instead when only the middle column(s) should
+ *      wrap while the first and last columns stay compact (`nowrap`).
+ * 4. Custom column widths:
+ *    - Because `width` rules below use `!important`, define per-table
+ *      or per-column width overrides in this file (or remove `!important`
+ *      from `width` if using inline styles / HTML `<colgroup>`).
+ */
 .md-typeset table {
   width: 100% !important;
   display: table !important;
@@ -144,4 +166,26 @@ h3 {
 .md-typeset td:last-child {
   white-space: normal !important;
   width: auto !important;
+}
+
+/* Comparison tables (with empty top-left corner cell): wrap comparison cols */
+.md-typeset table:has(thead th:first-child:empty) th:not(:first-child),
+.md-typeset table:has(thead th:first-child:empty) td:not(:first-child),
+.md-typeset .wrap-table th:not(:first-child),
+.md-typeset .wrap-table td:not(:first-child) {
+  white-space: normal !important;
+  width: 50% !important;
+}
+
+/* .wrap-middle: wrap middle column(s) while keeping first & last compact */
+.md-typeset .wrap-middle th:not(:first-child):not(:last-child),
+.md-typeset .wrap-middle td:not(:first-child):not(:last-child) {
+  white-space: normal !important;
+  width: auto !important;
+}
+
+.md-typeset .wrap-middle th:last-child,
+.md-typeset .wrap-middle td:last-child {
+  white-space: nowrap !important;
+  width: 1% !important;
 }
