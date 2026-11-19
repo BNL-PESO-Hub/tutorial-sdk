@@ -21,7 +21,7 @@ authors:
 
 runtime:
   language: python
-  python: "3.11"
+  python: "3.12"
   kernel: python3
   jupyterlab: true
   expose_port: 8888
@@ -57,7 +57,7 @@ content:
 build:
   dockerfile: Dockerfile
   image: advanced-data-science:latest
-  base_image: python:3.11-slim
+  base_image: python:3.12-slim
   copy_repo: true
   preexecute_notebooks: false
   export_devcontainer: true
@@ -105,7 +105,7 @@ Defines target execution platforms and options for the container environment.
 | Field | Type | Default | Description |
 | :--- | :---: | :---: | :--- |
 | `language` | `str` | `"python"` | Main programming language used in the tutorial. *Note: Currently always "python".* |
-| `python` | `str` | `"3.11"` | Python version configured in package environments. *Note: Currently informational; the python version is defined by the base image.* |
+| `python` | `str` | `"3.12"` | Python version configured in package environments. *Note: Currently informational; the python version is defined by the base image.* |
 | `kernel` | `str` | `"python3"` | Default registered Jupyter kernel name. *Note: Currently informational; defaults to "python3".* |
 | `jupyterlab` | `bool` | `True` | Exposes the configured runtime port in the generated Dockerfile when true. Declare `jupyterlab` in `dependencies.pip`, or provide it in the base image, when using a JupyterLab entrypoint or container validation. |
 | `expose_port` | `int` | `8888` | Main network port exposed by the container runtime. |
@@ -145,7 +145,7 @@ Configures build generation behaviors, targets, and caching.
 | :--- | :---: | :---: | :--- |
 | `dockerfile` | `str` | `"Dockerfile"` | Path where the generated Dockerfile should be written. |
 | `image` | `str` | `None` | Target container image tag name to compile or publish. |
-| `base_image` | `str` | `"python:3.11-slim"` | The target **Docker base image** to build on top of. |
+| `base_image` | `str` | `"python:3.12-slim"` | The target **Docker base image** to build on top of. |
 | `copy_repo` | `bool` | `True` | Copies the entire source repository to `/workspace` when true. When false, only declared content paths are copied. |
 | `preexecute_notebooks`| `bool` | `False` | Performs build-time notebook pre-execution. *Note: Future feature (not currently in use).* |
 | `export_devcontainer` | `bool` | `False` | Generates a corresponding `.devcontainer/devcontainer.json` configuration. |

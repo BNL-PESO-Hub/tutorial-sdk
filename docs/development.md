@@ -117,7 +117,7 @@ mkdocstrings, so a docstring change shows up in the docs.
 | :--- | :--- | :--- |
 | `lint` | `ruff check` and `ruff format --check` | the lint commands above |
 | `docs` | `mkdocs build --strict` | `mkdocs build --strict` |
-| `unit` | Python 3.10–3.13, each with a base install (docker-py must be absent) and with the `docker` extra | `pytest` in both environments |
+| `unit` | Python 3.10–3.14, each with a base install (docker-py must be absent) and with the `docker` extra | `pytest` in both environments |
 | `contract` | `pytest -m docker` on `ubuntu-latest` against a `registry:2` service (`TUTORIAL_SDK_CONTRACT_REGISTRY=localhost:5000`), after a `tutorial-sdk doctor` step; fails if any container with the managed label remains after the test run | `pytest -m docker` |
 
 </div>

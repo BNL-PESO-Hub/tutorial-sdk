@@ -245,7 +245,7 @@ def test_detect_python_version_pyproject(tmp_path):
 
 def test_detect_python_version_default(tmp_path):
     version = _detect_python_version(tmp_path)
-    assert version == "3.11"
+    assert version == "3.12"
 
 
 # ---- Notebook dependency extraction ----

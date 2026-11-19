@@ -63,7 +63,7 @@ Scripts (`.py`), data files (`.csv`, `.json`, `.parquet`, etc.), and documentati
 
 If a `tutorial.yml` already exists in the target directory, it is validated and a status message is printed - no files are overwritten.
 
-**Python version** is detected from `.python-version` or `pyproject.toml` `requires-python` (defaults to `3.11`).
+**Python version** is detected from `.python-version` or `pyproject.toml` `requires-python` (defaults to `3.12`).
 
 **Examples**
 

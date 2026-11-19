@@ -108,7 +108,7 @@ def test_cli_generate_dockerfile(tmp_path):
     )
     assert code == 0
     assert output_dockerfile.exists()
-    assert "FROM python:3.11-slim" in output_dockerfile.read_text()
+    assert "FROM python:3.12-slim" in output_dockerfile.read_text()
 
 
 def test_cli_validate(tmp_path):

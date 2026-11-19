@@ -3,8 +3,9 @@
 # Tutorial SDK
 [![PyPI version](https://img.shields.io/pypi/v/tutorial-sdk.svg?color=blue)](https://pypi.org/project/tutorial-sdk/)
 [![Python versions](https://img.shields.io/pypi/pyversions/tutorial-sdk.svg)](https://pypi.org/project/tutorial-sdk/)
-[![License](https://img.shields.io/badge/license-Apache--2.0-green.svg)](LICENSE)
-[![Docs](https://img.shields.io/badge/docs-MkDocs-blue)](docs/index.md)
+[![Tests](https://github.com/BNL-PESO-Hub/tutorial-sdk/actions/workflows/tests.yml/badge.svg)](https://github.com/BNL-PESO-Hub/tutorial-sdk/actions/workflows/tests.yml)
+[![Deploy Docs](https://github.com/BNL-PESO-Hub/tutorial-sdk/actions/workflows/docs.yml/badge.svg)](https://github.com/BNL-PESO-Hub/tutorial-sdk/actions/workflows/docs.yml)
+[![License](https://img.shields.io/badge/license-Apache--2.0-orange.svg)](LICENSE)
 
 A **declarative, reproducible tutorial packaging system** and command-line tool that bridges the gap between technical content and stable containerized runtimes.
 

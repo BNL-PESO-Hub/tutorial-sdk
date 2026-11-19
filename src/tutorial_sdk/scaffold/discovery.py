@@ -12,7 +12,6 @@ from .constants import (
     _INSTALL_RE,
     _MODULE_TO_PACKAGE,
     _PKG_TOKEN_RE,
-    _PYTHON_VERSION,
     _PYTHON_VERSION_STR,
     _VERSION_SPEC_RE,
 )
@@ -298,13 +297,10 @@ def _parse_pyproject(
         return info
 
     try:
-        if sys.version_info >= _PYTHON_VERSION:
+        if sys.version_info >= (3, 11):
             import tomllib
         else:
-            try:
-                import tomllib
-            except ImportError:
-                import tomli as tomllib  # type: ignore[no-redef]
+            import tomli as tomllib  # type: ignore[no-redef]
 
         data = tomllib.loads(
             pyproject.read_text(encoding="utf-8"),
@@ -500,13 +496,10 @@ def _detect_python_version(
     pyproject = source / "pyproject.toml"
     if pyproject.exists():
         try:
-            if sys.version_info >= _PYTHON_VERSION:
+            if sys.version_info >= (3, 11):
                 import tomllib
             else:
-                try:
-                    import tomllib
-                except ImportError:
-                    import tomli as tomllib  # type: ignore[no-redef]
+                import tomli as tomllib  # type: ignore[no-redef]
 
             data = tomllib.loads(
                 pyproject.read_text(encoding="utf-8"),
