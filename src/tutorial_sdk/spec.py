@@ -162,6 +162,24 @@ class TutorialSpec(BaseModel):
 
         return self.title or self.name
 
+    @property
+    def effective_image(self) -> str:
+        """Return the configured image tag or ``<name>:latest``."""
+
+        return self.build.image or f"{self.name}:latest"
+
+    def resolve_image(self, image: str | None = None) -> str:
+        """Return *image* override if given, otherwise ``effective_image``.
+
+        Args:
+            image: Optional image tag override.
+
+        Returns:
+            Resolved container image tag.
+        """
+
+        return image or self.effective_image
+
     @classmethod
     def load(cls, path: str | Path) -> "TutorialSpec":
         """Load a tutorial specification from YAML.
@@ -208,7 +226,7 @@ class TutorialSpec(BaseModel):
 
         Args:
             image: Override image tag.  Falls back to
-                the build spec's configured image.
+                :attr:`effective_image`.
 
         Returns:
             Dictionary suitable for JSON serialisation.
@@ -220,7 +238,7 @@ class TutorialSpec(BaseModel):
             "title": self.display_title,
             "description": self.description,
             "base_image": self.build.base_image,
-            "image": image or self.build.image,
+            "image": self.resolve_image(image),
             "runtime": self.runtime.model_dump(mode="json"),
             "content": self.content.model_dump(mode="json"),
             "dependencies": self.dependencies.model_dump(mode="json"),

@@ -43,6 +43,44 @@ def test_asset_validator(tmp_path):
     assert "All declared paths exist." in report2.checks[0].message
 
 
+def test_asset_validator_uses_resolver(tmp_path, monkeypatch):
+    from tutorial_sdk.resolver import ResolutionResult, TutorialResolver
+
+    calls = []
+    spec = TutorialSpec(
+        name="test",
+        content=ContentSpec(notebooks=["notebooks/missing.ipynb"]),
+    )
+
+    def spy_resolve(self, config_path="tutorial.yml"):
+        calls.append((self.spec, self.root))
+        return ResolutionResult(
+            spec=self.spec,
+            root=self.root,
+            config_path=self.root / config_path,
+            content_paths=(self.root / "notebooks/missing.ipynb",),
+            missing_paths=(self.root / "notebooks/missing.ipynb",),
+        )
+
+    monkeypatch.setattr(TutorialResolver, "resolve", spy_resolve)
+    report = AssetValidator(spec, root=tmp_path).validate()
+    assert calls == [(spec, tmp_path)]
+    assert not report.passed
+    assert report.errors == ["Missing declared paths: notebooks/missing.ipynb"]
+
+
+def test_asset_validator_handles_missing_absolute_path(tmp_path):
+    spec = TutorialSpec(
+        name="test",
+        content=ContentSpec(notebooks=["/nonexistent/abs_missing.ipynb"]),
+    )
+    report = AssetValidator(spec, root=tmp_path).validate()
+    assert not report.passed
+    assert report.errors == [
+        "Missing declared paths: /nonexistent/abs_missing.ipynb"
+    ]
+
+
 def test_dependency_validator():
     spec = TutorialSpec(
         name="test",

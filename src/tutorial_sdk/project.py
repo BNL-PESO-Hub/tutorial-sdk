@@ -6,7 +6,7 @@ from pathlib import Path
 from .backend import ContainerBackend, LogCallback
 from .config import DEFAULT_CONFIG
 from .builder import BuildResult, LocalBuilder
-from .resolver import ResolvedTutorialProject, TutorialResolver
+from .resolver import ResolutionResult, TutorialResolver
 from .runtime import RunResult, RuntimeLauncher
 from .spec import TutorialSpec
 from .validator import (
@@ -176,11 +176,11 @@ class TutorialProject:
             remove_clone=remove_clone,
         )
 
-    def resolve(self) -> ResolvedTutorialProject:
+    def resolve(self) -> ResolutionResult:
         """Resolve the project content graph.
 
         Returns:
-            A ``ResolvedTutorialProject`` with content
+            A ``ResolutionResult`` with content
             and missing paths populated.
         """
 
@@ -247,9 +247,7 @@ class TutorialProject:
 
         resolved = self.resolve()
         payload = self.spec.to_manifest_dict(image=resolved.image)
-        payload["missing_paths"] = [
-            str(path.relative_to(self.root)) for path in resolved.missing_paths
-        ]
+        payload["missing_paths"] = list(resolved.missing_relative_paths)
         return json.dumps(payload, indent=2) + "\n"
 
     def build(

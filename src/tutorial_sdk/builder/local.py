@@ -54,18 +54,20 @@ class LocalBuilder:
     def write_manifest(
         self,
         path: str | Path = DEFAULT_MANIFEST_NAME,
+        image: str | None = None,
     ) -> None:
         """Write the tutorial manifest.
 
         Args:
             path: Destination path for the JSON
                 manifest file.
+            image: Optional image tag override.
         """
 
         manifest = Path(path)
         if not manifest.is_absolute():
             manifest = self.root / manifest
-        ManifestGenerator(self.spec).write(manifest)
+        ManifestGenerator(self.spec).write(manifest, image=image)
 
     def write_devcontainer(
         self,
@@ -85,12 +87,16 @@ class LocalBuilder:
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(DevcontainerGenerator(self.spec).render_json())
 
-    def prepare(self) -> None:
-        """Write generated files configured by the tutorial spec."""
+    def prepare(self, image: str | None = None) -> None:
+        """Write generated files configured by the tutorial spec.
+
+        Args:
+            image: Optional image tag override for the manifest.
+        """
 
         self.write_dockerfile()
         if self.spec.build.export_manifest:
-            self.write_manifest()
+            self.write_manifest(image=image)
         if self.spec.build.export_devcontainer:
             self.write_devcontainer()
 
@@ -125,7 +131,7 @@ class LocalBuilder:
                 unknown.
         """
 
-        self.prepare()
+        self.prepare(image=image)
         # Forwarded only when given, keeping the historical call shape.
         options = (
             {"log_callback": log_callback} if log_callback is not None else {}

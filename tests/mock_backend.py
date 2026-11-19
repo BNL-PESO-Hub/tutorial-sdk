@@ -35,7 +35,7 @@ def make_spec(
     backend: str | None = None,
 ) -> SimpleNamespace:
     """Build a duck-typed stand-in for ``TutorialSpec``."""
-    return SimpleNamespace(
+    spec = SimpleNamespace(
         name=name,
         build=SimpleNamespace(
             image=image,
@@ -45,6 +45,11 @@ def make_spec(
         ),
         runtime=SimpleNamespace(expose_port=expose_port),
     )
+    spec.effective_image = image or f"{name}:latest"
+    spec.resolve_image = lambda override=None: (
+        override or spec.build.image or f"{spec.name}:latest"
+    )
+    return spec
 
 
 class MockBackend:

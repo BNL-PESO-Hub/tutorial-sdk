@@ -75,7 +75,7 @@ class DockerBuilder:
                 unknown.
         """
 
-        image = image or self.spec.build.image or f"{self.spec.name}:latest"
+        image = self.spec.resolve_image(image)
         dockerfile = self.root / self.spec.build.dockerfile
 
         if no_cache is None:

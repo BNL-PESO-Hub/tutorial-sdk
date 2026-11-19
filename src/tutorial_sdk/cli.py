@@ -576,7 +576,7 @@ def _ci(args: argparse.Namespace) -> int:
         except BuildError as exc:
             log(f"Build failed: {exc}")
             build_report = {
-                "image": (args.image or project.resolve().image),
+                "image": project.spec.resolve_image(args.image or None),
                 "dockerfile": args.dockerfile,
                 "pushed": False,
                 "digest": None,
@@ -613,7 +613,7 @@ def _ci(args: argparse.Namespace) -> int:
                 return 1
             log("Container validation passed.")
 
-    image_tag = args.image or project.resolve().image
+    image_tag = project.spec.resolve_image(args.image or None)
     _emit_github_output("image", image_tag)
     _emit_github_output("dockerfile", args.dockerfile)
     _emit_github_output("manifest", DEFAULT_MANIFEST_NAME)

@@ -363,19 +363,45 @@ def test_ci_publish_without_push_flag_does_not_push(tmp_path, monkeypatch):
 
 def test_ci_without_backend_reports_build_failure(tmp_path, monkeypatch):
     from tutorial_sdk.errors import BackendUnavailableError
+    from tutorial_sdk.project import TutorialProject
 
     spec_path = _write_spec(tmp_path)
 
     def unavailable(backend=None, *, fallback_name=None):
         raise BackendUnavailableError("No container backend is available")
 
+    def forbid_resolve(self):
+        raise AssertionError("ci build mode must not call project.resolve()")
+
     monkeypatch.setattr("tutorial_sdk.cli.get_backend", unavailable)
+    monkeypatch.setattr(TutorialProject, "resolve", forbid_resolve)
     code = main(["ci", "--config", str(spec_path), "--mode", "build"])
     assert code == 3
     build_report = json.loads((tmp_path / "tutorial-build.json").read_text())
     assert build_report["status"] == "failure"
+    assert build_report["image"] == "demo:latest"
     log = (tmp_path / "tutorial-sdk.log").read_text()
     assert "Build failed: No container backend is available" in log
+
+
+def test_ci_build_emits_effective_image_without_resolve(tmp_path, monkeypatch):
+    from tutorial_sdk.project import TutorialProject
+
+    backend = MockBackend()
+    monkeypatch.setattr(
+        TutorialProject,
+        "resolve",
+        lambda self: (_ for _ in ()).throw(
+            AssertionError("ci build mode must not call project.resolve()")
+        ),
+    )
+    code, _, build_report, _ = _run_ci(
+        tmp_path, monkeypatch, backend, "--mode", "build"
+    )
+    assert code == 0
+    assert build_report["image"] == "demo:latest"
+    out = (tmp_path / "out.txt").read_text()
+    assert "image=demo:latest\n" in out
 
 
 def test_ci_validate_mode_needs_no_backend(tmp_path, monkeypatch):

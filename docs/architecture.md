@@ -45,6 +45,12 @@ Create and import methods return a project instance and write `tutorial.yml` if 
 ```mermaid
 flowchart LR
 
+    subgraph Validation["Validation"]
+        direction TD
+        StaticVal["Static validators: Asset · Notebook · Dependency"]
+        ContainerVal["ContainerValidator"]
+    end
+
     subgraph Build["Build"]
         direction TD
         LocalBuilder["LocalBuilder"]
@@ -55,28 +61,25 @@ flowchart LR
         Generators -.-> DockerBuilder
     end
 
-    subgraph Validation["Validation"]
-        direction TD
-        StaticVal["Static validators: Asset · Notebook · Dependency"]
-        ContainerVal["ContainerValidator"]
-    end
-
     Project["TutorialProject"]
     Resolver["TutorialResolver"]
     Launcher["RuntimeLauncher"]
 
-    ResolvedProject(["ResolvedTutorialProject"])
+    ResolutionResult(["ResolutionResult"])
     BuildResult(["BuildResult"])
     Report(["ValidationReport"])
     RunResult(["RunResult"])
 
-    Project -->|"resolve() / inspect() / CI metadata"| Resolver
-    Resolver --> ResolvedProject
-    Project -->|"build()"| Build
-    Build --> BuildResult
+    Project -->|"resolve() / inspect()"| Resolver
+    Resolver --> ResolutionResult
+
     Project -->|"validate()"| Validation
     Project -.->|"container=True"| ContainerVal
     Validation --> Report
+
+    Project -->|"build()"| Build
+    Build --> BuildResult
+
     Project -->|"run()"| Launcher
     Launcher --> RunResult
 ```
@@ -145,18 +148,19 @@ flowchart LR
 | Pipeline Layer | Core Module | Architectural Duty |
 | :--- | :--- | :--- |
 | **Configuration** | `tutorial.yml` | Declarative package specification file defining content, build, and validation parameters. |
-| | `TutorialSpec` | Strongly-typed configuration schema implemented with Pydantic v2 models; `TutorialSpec.load` parses and validates `tutorial.yml`, and `write` serializes it back. |
+| | `TutorialSpec` | Strongly-typed configuration schema implemented with Pydantic v2 models; `TutorialSpec.load` parses and validates `tutorial.yml`, `write` serializes it back, and `display_title`, `effective_image`, and `resolve_image()` supply spec-derived defaults. |
 | **Scaffold & Import** | `ProjectScaffolder` | Creates new tutorial projects from built-in templates (`minimal`, `workshop`, etc.), writing `tutorial.yml` if absent and returning a `TutorialProject` instance. |
 | | `ProjectImporter` | Imports existing projects by scanning directories for notebooks, scripts, data, and docs; auto-extracts and cross-references dependencies from imports, install commands, requirement files, and `pyproject.toml` metadata; writes `tutorial.yml` if absent and returns a `TutorialProject` instance. |
 | **Orchestration** | `TutorialProject` | Central API orchestrator: loading (`load`), project creation (`init`, `init_from*`), resolution, build delegation (via `LocalBuilder`), validation, and runtime execution. |
-| | `TutorialResolver` | Resolves declared content paths against the project root, recording missing ones and the effective image tag (used by `resolve()`, `inspect()`, and `ci`). |
+| | `TutorialResolver` | Resolves declared content paths against the project root into a `ResolutionResult`, recording missing paths (and `missing_relative_paths`) and delegating `image` to `TutorialSpec.effective_image` (used by `resolve()`, `inspect()`, and `AssetValidator`). |
+| | `ResolutionResult` | Represents the outcome of resolving a tutorial specification against a project root (resolved content paths, missing paths, and effective image tag). |
 | **Generation** | `DockerfileGenerator` | Compiles reproducible Dockerfiles from tutorial specifications. |
 | | `ManifestGenerator` | Exports build manifest records (`tutorial-manifest.json`) for package traceability. |
 | | `DevcontainerGenerator` | Synthesizes `.devcontainer/devcontainer.json` configuration structures for localized environments. |
 | **Build** | `LocalBuilder` | Runs pre-build tasks in `prepare()` (always the Dockerfile; the manifest if `build.export_manifest`, the devcontainer if `build.export_devcontainer`) and delegates the image build to `DockerBuilder`, forwarding its `backend=` argument. |
 | | `DockerBuilder` | Resolves the build settings (image tag, Dockerfile, layer caching, platform), resolves the backend forwarded by `LocalBuilder` through `get_backend()`, and builds the image through it. |
 | | `BuildResult` | Represents the outcome of a container build, including the resulting image tag, Dockerfile path, image ID (native docker-py builds), and build status. |
-| **Validation** | `AssetValidator` | Checks that every declared content path (notebooks, scripts, data, docs, exercises, solutions) exists. |
+| **Validation** | `AssetValidator` | Checks through `TutorialResolver` that every declared content path (notebooks, scripts, data, docs, exercises, solutions) exists. |
 | | `NotebookValidator` | Parses notebook nodes, highlighting pre-existing execution exceptions or traceback errors. |
 | | `DependencyValidator` | Checks whether declared pip packages are locally importable via `importlib`, generating warnings for unavailable modules. |
 | | `ContainerValidator` | Performs live sandbox container boot checks and JupyterLab verification hooks through the selected container backend when `container=True`. |
@@ -173,7 +177,7 @@ flowchart LR
 
 
 ### 1. Configuration Layer (`spec.py`, `config.py`)
-- **`spec.py`**: Defines structured, strongly-typed schemas using **Pydantic v2** models (`TutorialSpec` and its nested sub-specifications).
+- **`spec.py`**: Defines structured, strongly-typed schemas using **Pydantic v2** models (`TutorialSpec` and its nested sub-specifications), along with spec-derived helpers (`display_title`, `effective_image`, `resolve_image()`, and `to_manifest_dict()`).
 - **`config.py`**: Defines `DEFAULT_CONFIG` (`tutorial.yml`) and `load_config`, a thin wrapper over `TutorialSpec.load`, which parses the YAML, validates it against the models, and raises `ConfigError` on failure.
 
 ### 2. Scaffold & Import Layer (`scaffold/`)
@@ -193,7 +197,7 @@ Authoritative names from `pyproject.toml`, install commands, and requirements fi
 
 ### 3. Orchestration Layer (`project.py`, `resolver.py`)
 - **`project.py`**: Defines `TutorialProject`, the primary programmatic API and central orchestrator of the SDK. It coordinates resolution, static and optional container validation, build-artifact generation and image builds (via `LocalBuilder`), and runtime execution. Provides `load()` for an existing `tutorial.yml`, `init()` for a new project (the `minimal` template via `ProjectScaffolder`), and `init_from()`, `init_from_url()`, and `init_from_github()` for importing existing projects (via `ProjectImporter`). `build()`, `validate()`, and `run()` accept an optional `backend=` keyword (a backend name or a `ContainerBackend` instance).
-- **`resolver.py`**: Defines `TutorialResolver` and `ResolvedTutorialProject`. It resolves declared content paths against the project root, records the missing ones, and exposes the effective image tag (`build.image` or `<name>:latest`). `TutorialProject.inspect()` and `tutorial-sdk ci` use it; `build()`, `validate()`, and `run()` do not go through it.
+- **`resolver.py`**: Defines `TutorialResolver` and `ResolutionResult`. It resolves declared content paths against the project root, records the missing ones (including `missing_relative_paths`), and exposes `image` by delegating to `TutorialSpec.effective_image` (`build.image` or `<name>:latest`). `TutorialProject.resolve()`, `TutorialProject.inspect()`, and `AssetValidator` use it; image-tag consumers (`DockerBuilder`, `RuntimeLauncher`, `ContainerValidator`, `TutorialSpec.to_manifest_dict()`, and `tutorial-sdk ci`) resolve tags directly via `TutorialSpec.resolve_image()`.
 
 ### 4. Generation Layer (`generator/`)
 - **`dockerfile.py`**: Compiles deterministic Dockerfiles configured with customizable snippet injections, `apt` and `pip` dependencies, local package installs, optional conda dependency comments, content copy rules, and runtime JupyterLab, shell, or command entrypoints.

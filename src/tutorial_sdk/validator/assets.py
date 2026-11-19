@@ -2,6 +2,7 @@
 
 from pathlib import Path
 
+from ..resolver import TutorialResolver
 from ..spec import TutorialSpec
 from .report import ValidationCheck, ValidationReport
 
@@ -32,11 +33,8 @@ class AssetValidator:
             checks.
         """
 
-        missing = [
-            path
-            for path in self.spec.content.all_paths()
-            if not (self.root / path).exists()
-        ]
+        resolved = TutorialResolver(self.spec, self.root).resolve()
+        missing = list(resolved.missing_relative_paths)
         if missing:
             message = "Missing declared paths: " + ", ".join(missing)
             return ValidationReport(

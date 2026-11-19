@@ -19,7 +19,7 @@
 
 ## Operation Results & Reports
 
-::: tutorial_sdk.ResolvedTutorialProject
+::: tutorial_sdk.ResolutionResult
 ::: tutorial_sdk.ValidationReport
 ::: tutorial_sdk.ValidationCheck
 ::: tutorial_sdk.BuildResult

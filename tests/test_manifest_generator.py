@@ -9,6 +9,7 @@ def test_manifest_render_dict():
     gen = ManifestGenerator(spec)
     result = gen.render_dict()
     assert result["name"] == "manifest-test"
+    assert result["image"] == "manifest-test:latest"
     assert "runtime" in result
     assert "content" in result
     assert "dependencies" in result
