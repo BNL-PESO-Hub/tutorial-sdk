@@ -125,6 +125,3 @@ mkdocstrings, so a docstring change shows up in the docs.
 `docs.yml` deploys the documentation to GitHub Pages from `main` (built with
 `--strict`); `release.yml` creates a release tag, and `publish.yml` builds the
 distribution and publishes it to PyPI.
-
-User-facing changes are recorded in
-[`CHANGELOG.md`](https://github.com/BNL-PESO-Hub/tutorial-sdk/blob/main/CHANGELOG.md).
