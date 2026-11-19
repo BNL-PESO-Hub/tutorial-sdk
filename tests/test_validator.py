@@ -1,6 +1,7 @@
 import json
 from unittest.mock import MagicMock, patch
 
+from tutorial_sdk.backend import DockerCliBackend
 from tutorial_sdk.spec import (
     TutorialSpec,
     ContentSpec,
@@ -40,6 +41,44 @@ def test_asset_validator(tmp_path):
     report2 = validator.validate()
     assert report2.passed
     assert "All declared paths exist." in report2.checks[0].message
+
+
+def test_asset_validator_uses_resolver(tmp_path, monkeypatch):
+    from tutorial_sdk.resolver import ResolutionResult, TutorialResolver
+
+    calls = []
+    spec = TutorialSpec(
+        name="test",
+        content=ContentSpec(notebooks=["notebooks/missing.ipynb"]),
+    )
+
+    def spy_resolve(self, config_path="tutorial.yml"):
+        calls.append((self.spec, self.root))
+        return ResolutionResult(
+            spec=self.spec,
+            root=self.root,
+            config_path=self.root / config_path,
+            content_paths=(self.root / "notebooks/missing.ipynb",),
+            missing_paths=(self.root / "notebooks/missing.ipynb",),
+        )
+
+    monkeypatch.setattr(TutorialResolver, "resolve", spy_resolve)
+    report = AssetValidator(spec, root=tmp_path).validate()
+    assert calls == [(spec, tmp_path)]
+    assert not report.passed
+    assert report.errors == ["Missing declared paths: notebooks/missing.ipynb"]
+
+
+def test_asset_validator_handles_missing_absolute_path(tmp_path):
+    spec = TutorialSpec(
+        name="test",
+        content=ContentSpec(notebooks=["/nonexistent/abs_missing.ipynb"]),
+    )
+    report = AssetValidator(spec, root=tmp_path).validate()
+    assert not report.passed
+    assert report.errors == [
+        "Missing declared paths: /nonexistent/abs_missing.ipynb"
+    ]
 
 
 def test_dependency_validator():
@@ -113,24 +152,23 @@ def test_notebook_validator(tmp_path):
 
 
 @patch("subprocess.run")
-@patch("time.sleep")
-def test_container_validator_success(mock_sleep, mock_run):
+@patch.object(DockerCliBackend, "wait_running", return_value=True)
+def test_container_validator_success(mock_wait, mock_run):
     spec = TutorialSpec(name="my-app")
-    validator = ContainerValidator(spec)
+    validator = ContainerValidator(spec, backend=DockerCliBackend())
 
-    # 1. rm -f (cleanup) -> returncode 0
+    # 1. rm -f (stale pre-clean) -> returncode 0
     # 2. run -d -> returncode 0, stdout container_id
-    # 3. inspect State.Running -> returncode 0, stdout "true"
-    # 4. exec jupyter lab --version -> returncode 0, stdout "4.0.0"
-    # 5. rm -f (cleanup final) -> returncode 0
+    # (wait_running is stubbed; polling is covered elsewhere)
+    # 3. exec jupyter lab --version -> returncode 0, stdout "4.0.0"
+    # 4. rm -f (cleanup final) -> returncode 0
 
     r1 = MagicMock(returncode=0, stdout="")
     r2 = MagicMock(returncode=0, stdout="container123\n", stderr="")
-    r3 = MagicMock(returncode=0, stdout="true\n", stderr="")
-    r4 = MagicMock(returncode=0, stdout="4.0.0\n", stderr="")
-    r5 = MagicMock(returncode=0, stdout="")
+    r3 = MagicMock(returncode=0, stdout="4.0.0\n", stderr="")
+    r4 = MagicMock(returncode=0, stdout="")
 
-    mock_run.side_effect = [r1, r2, r3, r4, r5]
+    mock_run.side_effect = [r1, r2, r3, r4]
 
     report = validator.validate()
     assert report.passed
@@ -142,10 +180,9 @@ def test_container_validator_success(mock_sleep, mock_run):
 
 
 @patch("subprocess.run")
-@patch("time.sleep")
-def test_container_validator_fail_start(mock_sleep, mock_run):
+def test_container_validator_fail_start(mock_run):
     spec = TutorialSpec(name="my-app")
-    validator = ContainerValidator(spec)
+    validator = ContainerValidator(spec, backend=DockerCliBackend())
 
     # 1. rm -f (cleanup) -> returncode 0
     # 2. run -d -> returncode 1, stderr "docker daemon not running"

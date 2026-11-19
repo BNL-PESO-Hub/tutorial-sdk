@@ -1,8 +1,13 @@
 import json
 from unittest.mock import patch, MagicMock
 
+import pytest
+
+from tutorial_sdk.backend import BACKEND_CHOICES
 from tutorial_sdk.cli import main
 from tutorial_sdk.spec import TutorialSpec
+
+from .mock_backend import MockBackend
 
 
 def test_cli_init(tmp_path):
@@ -103,7 +108,7 @@ def test_cli_generate_dockerfile(tmp_path):
     )
     assert code == 0
     assert output_dockerfile.exists()
-    assert "FROM python:3.11-slim" in output_dockerfile.read_text()
+    assert "FROM python:3.12-slim" in output_dockerfile.read_text()
 
 
 def test_cli_validate(tmp_path):
@@ -209,6 +214,7 @@ def test_cli_build(mock_build, tmp_path):
     mock_build.assert_called_once_with(
         image="custom-image:latest",
         platform=None,
+        backend=None,
     )
 
 
@@ -237,4 +243,238 @@ def test_cli_run(mock_run, tmp_path):
         image="custom-run-image:latest",
         port=9000,
         shell=True,
+        backend=None,
     )
+
+
+# ---------------------------------------------------------------------------
+# --backend and image push
+# ---------------------------------------------------------------------------
+
+
+def _write_spec(tmp_path, **build):
+    spec_path = tmp_path / "tutorial.yml"
+    TutorialSpec.model_validate({"name": "demo", "build": build}).write(
+        spec_path
+    )
+    return spec_path
+
+
+@pytest.mark.parametrize(
+    ("argv", "method", "expected"),
+    [
+        (["build"], "build", {"image": None, "platform": None}),
+        (["run"], "run", {"image": None, "port": 8888, "shell": False}),
+        (["validate", "--container"], "validate", {"container": True}),
+    ],
+)
+@pytest.mark.parametrize("choice", BACKEND_CHOICES)
+def test_backend_flag_is_forwarded(tmp_path, argv, method, expected, choice):
+    spec_path = _write_spec(tmp_path)
+    target = f"tutorial_sdk.project.TutorialProject.{method}"
+    with patch(target) as mocked:
+        mocked.return_value = MagicMock(returncode=0, passed=True)
+        mocked.return_value.render_json.return_value = "{}"
+        main([*argv, "--config", str(spec_path), "--backend", choice])
+    kwargs = mocked.call_args.kwargs
+    assert kwargs["backend"] == choice
+    for key, value in expected.items():
+        assert kwargs[key] == value
+
+
+@pytest.mark.parametrize("command", ["build", "run", "validate", "ci"])
+def test_backend_flag_rejects_unknown_values(tmp_path, command, capsys):
+    with pytest.raises(SystemExit) as info:
+        main([command, "--backend", "podman"])
+    assert info.value.code == 2
+    assert "invalid choice: 'podman'" in capsys.readouterr().err
+
+
+def _run_ci(tmp_path, monkeypatch, mock_backend, *argv, **build):
+    spec_path = _write_spec(tmp_path, **build)
+    selected = []
+
+    def mock_get_backend(backend=None, *, fallback_name=None):
+        selected.append((backend, fallback_name))
+        return mock_backend
+
+    monkeypatch.setattr("tutorial_sdk.cli.get_backend", mock_get_backend)
+    monkeypatch.setenv("GITHUB_OUTPUT", str(tmp_path / "out.txt"))
+    code = main(["ci", "--config", str(spec_path), *argv])
+    report = tmp_path / "tutorial-build.json"
+    build_report = json.loads(report.read_text()) if report.exists() else None
+    log = (tmp_path / "tutorial-sdk.log").read_text()
+    return code, selected, build_report, log
+
+
+def test_ci_all_uses_one_backend_and_pushes(tmp_path, monkeypatch):
+    backend = MockBackend(push_digest="sha256:feed")
+    code, selected, build_report, log = _run_ci(
+        tmp_path,
+        monkeypatch,
+        backend,
+        "--mode",
+        "all",
+        "--push",
+        "--image",
+        "reg.io/demo:1",
+        "--backend",
+        "docker-sdk",
+        backend="docker-cli",
+    )
+    assert code == 0
+    assert selected == [("docker-sdk", "docker-cli")]
+    assert backend.names() == [
+        "build_image",
+        "push_image",
+        "run_detached",
+        "wait_running",
+        "exec",
+        "remove",
+    ]
+    assert backend.calls[1] == ("push_image", "reg.io/demo:1")
+    assert build_report["pushed"] is True
+    assert build_report["digest"] == "sha256:feed"
+    assert "Pushing image reg.io/demo:1..." in log
+    assert "Image reg.io/demo:1 pushed successfully." in log
+
+
+def test_ci_push_failure_is_logged_not_fatal(tmp_path, monkeypatch):
+    backend = MockBackend(push_error="denied: requested access")
+    code, _, build_report, log = _run_ci(
+        tmp_path, monkeypatch, backend, "--mode", "publish", "--push"
+    )
+    assert code == 0
+    assert build_report["pushed"] is False
+    assert build_report["digest"] is None
+    assert "Push failed: denied: requested access" in log
+
+
+def test_ci_publish_without_push_flag_does_not_push(tmp_path, monkeypatch):
+    backend = MockBackend()
+    code, selected, build_report, _ = _run_ci(
+        tmp_path, monkeypatch, backend, "--mode", "publish"
+    )
+    assert code == 0
+    assert selected == [(None, None)]
+    assert "push_image" not in backend.names()
+    assert build_report["pushed"] is False
+
+
+def test_ci_without_backend_reports_build_failure(tmp_path, monkeypatch):
+    from tutorial_sdk.errors import BackendUnavailableError
+    from tutorial_sdk.project import TutorialProject
+
+    spec_path = _write_spec(tmp_path)
+
+    def unavailable(backend=None, *, fallback_name=None):
+        raise BackendUnavailableError("No container backend is available")
+
+    def forbid_resolve(self):
+        raise AssertionError("ci build mode must not call project.resolve()")
+
+    monkeypatch.setattr("tutorial_sdk.cli.get_backend", unavailable)
+    monkeypatch.setattr(TutorialProject, "resolve", forbid_resolve)
+    code = main(["ci", "--config", str(spec_path), "--mode", "build"])
+    assert code == 3
+    build_report = json.loads((tmp_path / "tutorial-build.json").read_text())
+    assert build_report["status"] == "failure"
+    assert build_report["image"] == "demo:latest"
+    log = (tmp_path / "tutorial-sdk.log").read_text()
+    assert "Build failed: No container backend is available" in log
+
+
+def test_ci_build_emits_effective_image_without_resolve(tmp_path, monkeypatch):
+    from tutorial_sdk.project import TutorialProject
+
+    backend = MockBackend()
+    monkeypatch.setattr(
+        TutorialProject,
+        "resolve",
+        lambda self: (_ for _ in ()).throw(
+            AssertionError("ci build mode must not call project.resolve()")
+        ),
+    )
+    code, _, build_report, _ = _run_ci(
+        tmp_path, monkeypatch, backend, "--mode", "build"
+    )
+    assert code == 0
+    assert build_report["image"] == "demo:latest"
+    out = (tmp_path / "out.txt").read_text()
+    assert "image=demo:latest\n" in out
+
+
+def test_ci_validate_mode_needs_no_backend(tmp_path, monkeypatch):
+    spec_path = _write_spec(tmp_path)
+
+    def forbidden(*args, **kwargs):
+        raise AssertionError("validate mode must not select a backend")
+
+    monkeypatch.setattr("tutorial_sdk.cli.get_backend", forbidden)
+    assert main(["ci", "--config", str(spec_path)]) == 0
+
+
+def test_ci_rejects_unknown_mode(tmp_path, capsys):
+    spec_path = _write_spec(tmp_path)
+    with pytest.raises(SystemExit) as info:
+        main(["ci", "--config", str(spec_path), "--mode", "deploy"])
+    assert info.value.code == 2
+    assert "invalid choice: 'deploy'" in capsys.readouterr().err
+    assert not (tmp_path / "tutorial-sdk.log").exists()
+
+
+# ---------------------------------------------------------------------------
+# --build-output
+# ---------------------------------------------------------------------------
+
+
+def _echo_backend(**kwargs):
+    return MockBackend(build_lines=("Step 1/2 : FROM base", "done"), **kwargs)
+
+
+def test_ci_build_output_streams_to_stdout_and_log(
+    tmp_path, monkeypatch, capsys
+):
+    backend = _echo_backend()
+    code, _, _, log = _run_ci(
+        tmp_path, monkeypatch, backend, "--mode", "build", "--build-output"
+    )
+    assert code == 0
+    assert backend.build_callbacks[0] is not None
+    out = capsys.readouterr().out
+    assert "Building container image...\nStep 1/2 : FROM base\ndone\n" in out
+    assert "Step 1/2 : FROM base\ndone\nContainer built in" in log
+
+
+def test_ci_without_build_output_stays_silent(tmp_path, monkeypatch, capsys):
+    backend = _echo_backend()
+    code, _, _, log = _run_ci(tmp_path, monkeypatch, backend, "--mode", "build")
+    assert code == 0
+    assert backend.build_callbacks == [None]
+    assert "Step 1/2" not in capsys.readouterr().out
+    assert "Step 1/2" not in log
+
+
+def test_ci_build_output_failure(tmp_path, monkeypatch):
+    backend = _echo_backend(build_error="Docker build failed")
+    code, _, build_report, log = _run_ci(
+        tmp_path, monkeypatch, backend, "--mode", "build", "--build-output"
+    )
+    assert code == 3
+    assert build_report["status"] == "failure"
+    assert "done\nBuild failed: Docker build failed" in log
+
+
+def test_build_output_flag(tmp_path, monkeypatch, capsys):
+    spec_path = _write_spec(tmp_path)
+    backend = _echo_backend()
+    monkeypatch.setattr(
+        "tutorial_sdk.builder.docker.get_backend",
+        lambda backend_=None, **kwargs: backend,
+    )
+    assert main(["build", "--config", str(spec_path), "--build-output"]) == 0
+    assert capsys.readouterr().out == "Step 1/2 : FROM base\ndone\n"
+
+    assert main(["build", "--config", str(spec_path)]) == 0
+    assert capsys.readouterr().out == ""
+    assert backend.build_callbacks[1] is None

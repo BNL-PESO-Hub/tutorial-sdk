@@ -15,7 +15,7 @@ def test_spec_defaults():
     assert spec.name == "test-tutorial"
     assert spec.version == "0.1.0"
     assert spec.display_title == "test-tutorial"
-    assert spec.build.base_image == "python:3.11-slim"
+    assert spec.build.base_image == "python:3.12-slim"
     assert isinstance(spec.runtime, RuntimeSpec)
     assert isinstance(spec.dependencies, DependencySpec)
     assert isinstance(spec.content, ContentSpec)
@@ -62,3 +62,62 @@ def test_to_manifest_dict():
     assert "runtime" in manifest
     assert "content" in manifest
     assert "dependencies" in manifest
+
+
+def test_effective_and_resolve_image():
+    default_spec = TutorialSpec(name="demo")
+    assert default_spec.effective_image == "demo:latest"
+    assert default_spec.resolve_image() == "demo:latest"
+    assert default_spec.resolve_image("custom:v2") == "custom:v2"
+    assert default_spec.to_manifest_dict()["image"] == "demo:latest"
+
+    configured_spec = TutorialSpec(
+        name="demo",
+        build=BuildSpec(image="ghcr.io/org/demo:1.0"),
+    )
+    assert configured_spec.effective_image == "ghcr.io/org/demo:1.0"
+    assert configured_spec.resolve_image() == "ghcr.io/org/demo:1.0"
+    assert configured_spec.resolve_image("override:2.0") == "override:2.0"
+    assert configured_spec.to_manifest_dict()["image"] == "ghcr.io/org/demo:1.0"
+
+
+# ---------------------------------------------------------------------------
+# build.backend
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("value", ["auto", "docker-sdk", "docker-cli"])
+def test_build_backend_values(tmp_path, value):
+    path = tmp_path / "tutorial.yml"
+    path.write_text(f"name: demo\nbuild:\n  backend: {value}\n")
+    spec = TutorialSpec.load(path)
+    assert spec.build.backend == value
+    spec.write(path)
+    assert f"backend: {value}" in path.read_text()
+
+
+def test_build_backend_unknown_is_config_error(tmp_path):
+    path = tmp_path / "tutorial.yml"
+    path.write_text("name: demo\nbuild:\n  backend: podman\n")
+    with pytest.raises(ConfigError, match="build.backend"):
+        TutorialSpec.load(path)
+
+
+def test_build_backend_unset_is_not_written(tmp_path):
+    # Files written by this version stay readable by earlier ones,
+    # whose BuildSpec rejects unknown keys.
+    spec = TutorialSpec(name="demo")
+    assert spec.build.backend is None
+    path = tmp_path / "tutorial.yml"
+    spec.write(path)
+    assert "backend" not in path.read_text()
+
+
+def test_build_backend_choices_match_selection():
+    from typing import get_args
+
+    from tutorial_sdk.backend import BACKEND_CHOICES
+    from tutorial_sdk.spec import BackendName
+
+    assert set(get_args(BackendName)) == set(BACKEND_CHOICES)
+    assert BuildSpec().backend is None

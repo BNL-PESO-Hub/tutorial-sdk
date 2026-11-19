@@ -15,7 +15,7 @@ def test_dockerfile_generator_minimal():
     generator = DockerfileGenerator(spec)
     rendered = generator.render()
 
-    assert "FROM python:3.11-slim" in rendered
+    assert "FROM python:3.12-slim" in rendered
     assert 'LABEL org.opencontainers.image.title="minimal"' in rendered
     assert "ENV PYTHONDONTWRITEBYTECODE=1" in rendered
     assert "WORKDIR /workspace" in rendered

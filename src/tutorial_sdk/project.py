@@ -3,9 +3,10 @@
 import json
 from pathlib import Path
 
+from .backend import ContainerBackend, LogCallback
 from .config import DEFAULT_CONFIG
 from .builder import BuildResult, LocalBuilder
-from .resolver import ResolvedTutorialProject, TutorialResolver
+from .resolver import ResolutionResult, TutorialResolver
 from .runtime import RunResult, RuntimeLauncher
 from .spec import TutorialSpec
 from .validator import (
@@ -49,6 +50,10 @@ class TutorialProject:
         Returns:
             A ``TutorialProject`` rooted in the config
             file's parent directory.
+
+        Raises:
+            ConfigError: If the specification file cannot
+                be read or validated.
         """
 
         config_path = Path(path)
@@ -60,22 +65,36 @@ class TutorialProject:
         )
 
     @classmethod
-    def init(cls, path: str | Path = ".") -> "TutorialProject":
-        """Create a minimal tutorial project skeleton.
+    def init(
+        cls,
+        path: str | Path = ".",
+        template: str = "minimal",
+        name: str | None = None,
+    ) -> "TutorialProject":
+        """Create a starter tutorial project from a built-in template.
 
         Args:
             path: Target directory for the new project.
+            template: Built-in template name (``minimal``,
+                ``notebook-tutorial``, ``workshop``,
+                ``lab-exercise``, or ``demo``).
+            name: Optional project name override.  Defaults
+                to the target directory basename.
 
         Returns:
-            A ``TutorialProject`` with a ``minimal``
+            A ``TutorialProject`` with the selected
             template applied.
+
+        Raises:
+            ScaffoldError: If *template* is not recognised.
         """
 
         from .scaffold import ProjectScaffolder
 
         return ProjectScaffolder().scaffold(
-            "minimal",
+            template,
             Path(path),
+            name=name,
         )
 
     @classmethod
@@ -157,11 +176,11 @@ class TutorialProject:
             remove_clone=remove_clone,
         )
 
-    def resolve(self) -> ResolvedTutorialProject:
+    def resolve(self) -> ResolutionResult:
         """Resolve the project content graph.
 
         Returns:
-            A ``ResolvedTutorialProject`` with content
+            A ``ResolutionResult`` with content
             and missing paths populated.
         """
 
@@ -175,6 +194,7 @@ class TutorialProject:
         strict: bool = False,
         container: bool = False,
         image: str | None = None,
+        backend: ContainerBackend | str | None = None,
     ) -> ValidationReport:
         """Run configured validation checks.
 
@@ -185,9 +205,19 @@ class TutorialProject:
                 runtime validation.
             image: Override image tag for container
                 validation.
+            backend: Container backend instance or name for
+                container validation.  A name takes precedence
+                over ``TUTORIAL_SDK_BACKEND`` and
+                ``build.backend``.
 
         Returns:
             Combined ``ValidationReport``.
+
+        Raises:
+            ValidationError: If container validation cannot
+                complete.
+            ConfigError: If the selected backend name is
+                unknown.
         """
 
         reports = [
@@ -200,6 +230,7 @@ class TutorialProject:
                 ContainerValidator(
                     self.spec,
                     self.root,
+                    backend=backend,
                 ).validate(image=image)
             )
         report = ValidationReport.combine(reports)
@@ -216,9 +247,7 @@ class TutorialProject:
 
         resolved = self.resolve()
         payload = self.spec.to_manifest_dict(image=resolved.image)
-        payload["missing_paths"] = [
-            str(path.relative_to(self.root)) for path in resolved.missing_paths
-        ]
+        payload["missing_paths"] = list(resolved.missing_relative_paths)
         return json.dumps(payload, indent=2) + "\n"
 
     def build(
@@ -226,6 +255,8 @@ class TutorialProject:
         image: str | None = None,
         no_cache: bool | None = None,
         platform: str | None = None,
+        backend: ContainerBackend | str | None = None,
+        log_callback: LogCallback | None = None,
     ) -> BuildResult:
         """Generate a Dockerfile and build the container image.
 
@@ -235,12 +266,30 @@ class TutorialProject:
                 layer caching.
             platform: Target platform (e.g.
                 ``linux/amd64``).
+            backend: Container backend instance or name.  A name
+                takes precedence over ``TUTORIAL_SDK_BACKEND`` and
+                ``build.backend``.
+            log_callback: Optional sink receiving each build output
+                line as it is produced.  Without it the build is
+                silent and a failure's ``BuildError`` message carries
+                the build output; with it the output has already been
+                shown and the message is short.
 
         Returns:
             A ``BuildResult`` with the image tag and
             Dockerfile path.
+
+        Raises:
+            BuildError: If the build fails or no container
+                backend is available.
+            ConfigError: If the selected backend name is
+                unknown.
         """
 
+        # Forwarded only when given, keeping the historical call shape.
+        options = (
+            {"log_callback": log_callback} if log_callback is not None else {}
+        )
         return LocalBuilder(
             self.spec,
             self.root,
@@ -248,10 +297,16 @@ class TutorialProject:
             image=image,
             no_cache=no_cache,
             platform=platform,
+            backend=backend,
+            **options,
         )
 
     def run(
-        self, image: str | None = None, port: int = 8888, shell: bool = False
+        self,
+        image: str | None = None,
+        port: int = 8888,
+        shell: bool = False,
+        backend: ContainerBackend | str | None = None,
     ) -> RunResult:
         """Run the tutorial container locally.
 
@@ -260,15 +315,25 @@ class TutorialProject:
             port: Host port to bind.
             shell: If ``True``, override entrypoint
                 with an interactive shell.
+            backend: Container backend instance or name.  A name
+                takes precedence over ``TUTORIAL_SDK_BACKEND`` and
+                ``build.backend``.
 
         Returns:
             A ``RunResult`` with the container exit
             code.
+
+        Raises:
+            BackendUnavailableError: If no container backend
+                is available.
+            ConfigError: If the selected backend name is
+                unknown.
         """
 
         return RuntimeLauncher(
             self.spec,
             self.root,
+            backend=backend,
         ).run(
             image=image,
             port=port,

@@ -3,8 +3,9 @@
 # Tutorial SDK
 [![PyPI version](https://img.shields.io/pypi/v/tutorial-sdk.svg?color=blue)](https://pypi.org/project/tutorial-sdk/)
 [![Python versions](https://img.shields.io/pypi/pyversions/tutorial-sdk.svg)](https://pypi.org/project/tutorial-sdk/)
-[![License](https://img.shields.io/badge/license-Apache--2.0-green.svg)](LICENSE)
-[![Docs](https://img.shields.io/badge/docs-MkDocs-blue)](docs/index.md)
+[![Tests](https://github.com/BNL-PESO-Hub/tutorial-sdk/actions/workflows/tests.yml/badge.svg)](https://github.com/BNL-PESO-Hub/tutorial-sdk/actions/workflows/tests.yml)
+[![Deploy Docs](https://github.com/BNL-PESO-Hub/tutorial-sdk/actions/workflows/docs.yml/badge.svg)](https://github.com/BNL-PESO-Hub/tutorial-sdk/actions/workflows/docs.yml)
+[![License](https://img.shields.io/badge/license-Apache--2.0-orange.svg)](LICENSE)
 
 A **declarative, reproducible tutorial packaging system** and command-line tool that bridges the gap between technical content and stable containerized runtimes.
 
@@ -21,9 +22,10 @@ Tutorial environments tend to drift over time: Dockerfiles diverge from notebook
 
 ## Key Features
 
-* **Declarative Configuration (`tutorial.yml`)**: Declare the whole tutorial surface - metadata, contents, package environments, and validation rules - in a single, Pydantic-validated YAML file.
-* **Deterministic Environment Synthesis**: Generates cache-friendly, reproducible Dockerfiles matching the exact dependency graph specified in your config.
+* **Declarative Configuration (`tutorial.yml`)**: Declare tutorial metadata, contents, package environments, and validation rules in a single, Pydantic-validated YAML file.
+* **Deterministic Environment Synthesis**: Generates cache-friendly, reproducible Dockerfiles from the dependencies and settings specified in your config.
 * **Notebook-Aware Container Validation**: Runs comprehensive local checks (assets, dependencies, notebook error detection) as well as full container validation (verifying built containers start successfully and that JupyterLab runs flawlessly inside).
+* **Pluggable Container Backends**: Runs container builds, validation, and local execution through either the Docker CLI or the Python Docker SDK (`tutorial-sdk[docker]`), with built-in environment diagnostics.
 * **GitHub Actions Integration**: Built-in support for standard, thin CI workflows (`tutorial-sdk ci`) that validate, build, test, and publish images from pull requests and releases.
 * **Extensible Scaffolding Templates**: Starter templates to quickly spin up beginner workshops, notebooks, course modules, or custom lab exercises.
 

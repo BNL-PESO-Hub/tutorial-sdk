@@ -4,13 +4,32 @@ import argparse
 import sys
 from pathlib import Path
 
+from .backend import (
+    BACKEND_CHOICES,
+    ContainerBackend,
+    LogCallback,
+    get_backend,
+)
+from .builder.local import DEFAULT_MANIFEST_NAME, LocalBuilder
 from .config import DEFAULT_CONFIG
-from .errors import BuildError, ConfigError, ScaffoldError, TutorialSdkError
+from .errors import (
+    BackendError,
+    BuildError,
+    ConfigError,
+    ScaffoldError,
+    TutorialSdkError,
+)
 from .project import TutorialProject
-from .builder.local import LocalBuilder, DEFAULT_MANIFEST_NAME
 from .scaffold import ProjectScaffolder
 
 DEFAULT_VALIDATION_REPORT_NAME: str = "tutorial-validation.json"
+
+_BACKEND_HELP = (
+    "Container backend to use (overrides TUTORIAL_SDK_BACKEND and "
+    "build.backend in the config)."
+)
+
+_BUILD_OUTPUT_HELP = "Print the image build output as it is produced."
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -115,6 +134,10 @@ def _build_parser() -> argparse.ArgumentParser:
     build.add_argument("--config", default=DEFAULT_CONFIG)
     build.add_argument("--image", default=None)
     build.add_argument("--platform", default=None)
+    build.add_argument(
+        "--build-output", action="store_true", help=_BUILD_OUTPUT_HELP
+    )
+    _add_backend_argument(build)
     build.set_defaults(func=_build)
 
     run = subparsers.add_parser("run")
@@ -122,6 +145,7 @@ def _build_parser() -> argparse.ArgumentParser:
     run.add_argument("--image", default=None)
     run.add_argument("--port", type=int, default=8888)
     run.add_argument("--shell", action="store_true")
+    _add_backend_argument(run)
     run.set_defaults(func=_run)
 
     validate = subparsers.add_parser("validate")
@@ -132,6 +156,7 @@ def _build_parser() -> argparse.ArgumentParser:
         "--output",
         default=DEFAULT_VALIDATION_REPORT_NAME,
     )
+    _add_backend_argument(validate)
     validate.set_defaults(func=_validate)
 
     scaffold = subparsers.add_parser("scaffold")
@@ -141,15 +166,57 @@ def _build_parser() -> argparse.ArgumentParser:
     scaffold.set_defaults(func=_scaffold)
 
     ci = subparsers.add_parser("ci")
-    ci.add_argument("--mode", default="validate")
+    ci.add_argument(
+        "--mode",
+        default="validate",
+        choices=("validate", "build", "test", "publish", "all"),
+    )
     ci.add_argument("--config", default=DEFAULT_CONFIG)
     ci.add_argument("--dockerfile", default="Dockerfile")
     ci.add_argument("--image", default="")
     ci.add_argument("--push", action="store_true")
     ci.add_argument("--strict", action="store_true")
     ci.add_argument("--no-cache", action="store_true")
+    ci.add_argument(
+        "--build-output", action="store_true", help=_BUILD_OUTPUT_HELP
+    )
+    _add_backend_argument(ci)
     ci.set_defaults(func=_ci)
+
+    doctor = subparsers.add_parser(
+        "doctor",
+        help="Report the container backends available on this host.",
+    )
+    doctor.add_argument(
+        "--config",
+        default=None,
+        help=(
+            "Tutorial config whose build.backend takes part in the "
+            "selection, if the file exists (default: tutorial.yml)."
+        ),
+    )
+    doctor.add_argument(
+        "--backend",
+        choices=BACKEND_CHOICES,
+        default=None,
+        help="Evaluate the selection as if --backend were given.",
+    )
+    doctor.add_argument(
+        "--json", action="store_true", help="Print the report as JSON."
+    )
+    doctor.set_defaults(func=_doctor)
     return parser
+
+
+def _add_backend_argument(parser: argparse.ArgumentParser) -> None:
+    """Register the ``--backend`` option on a subcommand parser."""
+
+    parser.add_argument(
+        "--backend",
+        choices=BACKEND_CHOICES,
+        default=None,
+        help=_BACKEND_HELP,
+    )
 
 
 def _load_project(config: str) -> TutorialProject:
@@ -307,11 +374,22 @@ def _build(args: argparse.Namespace) -> int:
         Exit code (``0``).
     """
 
+    options: dict[str, object] = {}
+    if args.build_output:
+        options["log_callback"] = _print_line
     _load_project(args.config).build(
         image=args.image,
         platform=args.platform,
+        backend=args.backend,
+        **options,
     )
     return 0
+
+
+def _print_line(line: str) -> None:
+    """Print one line of build output immediately."""
+
+    print(line, flush=True)
 
 
 def _run(args: argparse.Namespace) -> int:
@@ -328,6 +406,7 @@ def _run(args: argparse.Namespace) -> int:
         image=args.image,
         port=args.port,
         shell=args.shell,
+        backend=args.backend,
     )
     return result.returncode
 
@@ -348,6 +427,7 @@ def _validate(args: argparse.Namespace) -> int:
     report = project.validate(
         strict=args.strict,
         container=args.container,
+        backend=args.backend,
     )
     report.write(Path(project.root) / args.output)
 
@@ -412,7 +492,7 @@ def _ci(args: argparse.Namespace) -> int:
     logs: list[str] = []
 
     def log(msg: str) -> None:
-        print(msg)
+        print(msg, flush=True)
         logs.append(msg)
 
     log("Starting tutorial-sdk CI workflow...")
@@ -453,10 +533,18 @@ def _ci(args: argparse.Namespace) -> int:
     elif mode in {"build", "test", "publish", "all"}:
         log("Building container image...")
         try:
+            # One backend for build, container validation, and push.
+            backend = _ci_backend(args.backend, project)
             start_build = time.time()
+            options: dict[str, object] = {}
+            if args.build_output:
+                # Build lines also go to tutorial-sdk.log.
+                options["log_callback"] = log
             build_result = project.build(
                 image=args.image or None,
                 no_cache=args.no_cache,
+                backend=backend,
+                **options,
             )
             duration = time.time() - start_build
             log(f"Container built in {duration:.2f}s: {build_result.image}")
@@ -464,9 +552,10 @@ def _ci(args: argparse.Namespace) -> int:
             pushed = False
             digest = None
             if mode in {"publish", "all"} and push:
-                pushed, digest = _docker_push(
+                pushed, digest = _push_image(
                     build_result.image,
                     log,
+                    backend,
                 )
 
             build_report = {
@@ -487,7 +576,7 @@ def _ci(args: argparse.Namespace) -> int:
         except BuildError as exc:
             log(f"Build failed: {exc}")
             build_report = {
-                "image": (args.image or project.resolve().image),
+                "image": project.spec.resolve_image(args.image or None),
                 "dockerfile": args.dockerfile,
                 "pushed": False,
                 "digest": None,
@@ -506,6 +595,7 @@ def _ci(args: argparse.Namespace) -> int:
                 strict=strict,
                 container=True,
                 image=build_result.image,
+                backend=backend,
             )
             val_path = Path(project.root) / DEFAULT_VALIDATION_REPORT_NAME
             report.write(val_path)
@@ -523,7 +613,7 @@ def _ci(args: argparse.Namespace) -> int:
                 return 1
             log("Container validation passed.")
 
-    image_tag = args.image or project.resolve().image
+    image_tag = project.spec.resolve_image(args.image or None)
     _emit_github_output("image", image_tag)
     _emit_github_output("dockerfile", args.dockerfile)
     _emit_github_output("manifest", DEFAULT_MANIFEST_NAME)
@@ -533,45 +623,77 @@ def _ci(args: argparse.Namespace) -> int:
     return 0
 
 
-def _docker_push(
-    image: str,
-    log: object,
-) -> tuple[bool, str | None]:
-    """Push a Docker image and return (pushed, digest)."""
+def _ci_backend(
+    backend: str | None,
+    project: TutorialProject,
+) -> ContainerBackend:
+    """Select the container backend for a ``ci`` run.
 
-    import subprocess
+    Args:
+        backend: Value of ``--backend``, if given.
+        project: Loaded project; its ``build.backend`` is the
+            configuration fallback.
+
+    Returns:
+        The selected backend.
+
+    Raises:
+        BuildError: If no container backend is available.
+    """
+
+    try:
+        return get_backend(backend, fallback_name=project.spec.build.backend)
+    except BackendError as exc:
+        raise BuildError(str(exc)) from exc
+
+
+def _push_image(
+    image: str,
+    log: LogCallback,
+    backend: ContainerBackend,
+) -> tuple[bool, str | None]:
+    """Push an image and return (pushed, digest).
+
+    A failed push is logged and reported as not pushed; it does not
+    fail the run.
+    """
 
     log(f"Pushing image {image}...")
-    result = subprocess.run(
-        ["docker", "push", image],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    if result.returncode != 0:
-        log(f"Push failed: {result.stderr.strip()}")
+    try:
+        result = backend.push_image(image)
+    except BackendError as exc:
+        log(f"Push failed: {exc}")
         return False, None
     log(f"Image {image} pushed successfully.")
+    return True, result.digest
 
-    # Attempt to extract digest from inspect.
-    inspect = subprocess.run(
-        [
-            "docker",
-            "inspect",
-            "--format",
-            "{{index .RepoDigests 0}}",
-            image,
-        ],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    digest = None
-    if inspect.returncode == 0:
-        raw = inspect.stdout.strip()
-        if "@" in raw:
-            digest = raw.split("@", 1)[1]
-    return True, digest
+
+def _doctor(args: argparse.Namespace) -> int:
+    """Handle the ``doctor`` subcommand.
+
+    Prints which container backends are available, which one would
+    be selected and why, and the containers tutorial-sdk started.
+
+    Args:
+        args: Parsed CLI arguments.
+
+    Returns:
+        ``0`` if a backend is selected and reaches its daemon, ``1``
+        otherwise.
+    """
+
+    import json
+
+    from .doctor import diagnose
+
+    if args.config is not None and not Path(args.config).is_file():
+        raise ConfigError(f"Tutorial specification not found: {args.config}")
+    report = diagnose(args.backend, config=args.config or DEFAULT_CONFIG)
+    if args.json:
+        print(json.dumps(report.to_dict(), indent=2))
+    else:
+        print(report.render_text(), end="")
+    return 0 if report.ok else 1
 
 
 def _emit_github_output(

@@ -1,9 +1,9 @@
 """Local runtime launcher."""
 
-import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
+from ..backend import ContainerBackend, get_backend
 from ..spec import TutorialSpec
 
 
@@ -23,16 +23,23 @@ class RuntimeLauncher:
         self,
         spec: TutorialSpec,
         root: str | Path = ".",
+        backend: ContainerBackend | str | None = None,
     ) -> None:
         """Create a runtime launcher.
 
         Args:
             spec: Parsed tutorial specification.
             root: Tutorial project root directory.
+            backend: Container backend instance, or a backend name
+                (``"auto"``, ``"docker-cli"``, ``"docker-sdk"``)
+                taking precedence over ``TUTORIAL_SDK_BACKEND`` and
+                ``build.backend``.  Defaults to that selection
+                (see :func:`tutorial_sdk.backend.get_backend`).
         """
 
         self.spec = spec
         self.root = Path(root)
+        self.backend = backend
 
     def run(
         self,
@@ -50,23 +57,26 @@ class RuntimeLauncher:
 
         Returns:
             A ``RunResult`` with the exit code.
+
+        Raises:
+            BackendUnavailableError: If no container backend
+                is available.
+            ConfigError: If the selected backend name is
+                unknown.
         """
 
-        image = image or self.spec.build.image or f"{self.spec.name}:latest"
-        command = [
-            "docker",
-            "run",
-            "--rm",
-            "-p",
-            f"{port}:{self.spec.runtime.expose_port}",
-        ]
-        if shell:
-            command.extend(["-it", "--entrypoint", "/bin/sh"])
-        command.append(image)
+        image = self.spec.resolve_image(image)
+        backend = get_backend(
+            self.backend, fallback_name=self.spec.build.backend
+        )
 
-        completed = subprocess.run(command, check=False)
+        exit_info = backend.run_foreground(
+            image,
+            ports={self.spec.runtime.expose_port: port},
+            interactive_shell=shell,
+        )
         return RunResult(
-            image=image,
-            command=tuple(command),
-            returncode=completed.returncode,
+            image=exit_info.image,
+            command=exit_info.command,
+            returncode=exit_info.returncode,
         )

@@ -6,9 +6,10 @@ from typing import Any, Literal
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from .backend import BackendName
 from .errors import ConfigError
 
-_PYTHON_VERSION_STR: str = "3.11"
+_PYTHON_VERSION_STR: str = "3.12"
 
 
 class AuthorSpec(BaseModel):
@@ -79,7 +80,13 @@ class DockerfileSections(BaseModel):
 
 
 class BuildSpec(BaseModel):
-    """Build artifact and container image configuration."""
+    """Build artifact and container image configuration.
+
+    ``backend`` selects the container backend used by ``build``,
+    ``validate --container``, ``run``, and ``ci`` when neither the
+    ``--backend`` flag nor ``TUTORIAL_SDK_BACKEND`` names one.  Unset
+    (the default) means ``auto``; it is left out of written files.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
@@ -91,6 +98,7 @@ class BuildSpec(BaseModel):
     export_devcontainer: bool = False
     export_manifest: bool = True
     cache: bool = True
+    backend: BackendName | None = None
     custom_sections: DockerfileSections = Field(
         default_factory=DockerfileSections
     )
@@ -154,6 +162,24 @@ class TutorialSpec(BaseModel):
 
         return self.title or self.name
 
+    @property
+    def effective_image(self) -> str:
+        """Return the configured image tag or ``<name>:latest``."""
+
+        return self.build.image or f"{self.name}:latest"
+
+    def resolve_image(self, image: str | None = None) -> str:
+        """Return *image* override if given, otherwise ``effective_image``.
+
+        Args:
+            image: Optional image tag override.
+
+        Returns:
+            Resolved container image tag.
+        """
+
+        return image or self.effective_image
+
     @classmethod
     def load(cls, path: str | Path) -> "TutorialSpec":
         """Load a tutorial specification from YAML.
@@ -200,7 +226,7 @@ class TutorialSpec(BaseModel):
 
         Args:
             image: Override image tag.  Falls back to
-                the build spec's configured image.
+                :attr:`effective_image`.
 
         Returns:
             Dictionary suitable for JSON serialisation.
@@ -212,7 +238,7 @@ class TutorialSpec(BaseModel):
             "title": self.display_title,
             "description": self.description,
             "base_image": self.build.base_image,
-            "image": image or self.build.image,
+            "image": self.resolve_image(image),
             "runtime": self.runtime.model_dump(mode="json"),
             "content": self.content.model_dump(mode="json"),
             "dependencies": self.dependencies.model_dump(mode="json"),

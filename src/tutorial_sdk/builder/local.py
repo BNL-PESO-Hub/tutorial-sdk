@@ -2,6 +2,7 @@
 
 from pathlib import Path
 
+from ..backend import ContainerBackend, LogCallback
 from .docker import BuildResult, DockerBuilder
 from ..generator import (
     DevcontainerGenerator,
@@ -53,18 +54,20 @@ class LocalBuilder:
     def write_manifest(
         self,
         path: str | Path = DEFAULT_MANIFEST_NAME,
+        image: str | None = None,
     ) -> None:
         """Write the tutorial manifest.
 
         Args:
             path: Destination path for the JSON
                 manifest file.
+            image: Optional image tag override.
         """
 
         manifest = Path(path)
         if not manifest.is_absolute():
             manifest = self.root / manifest
-        ManifestGenerator(self.spec).write(manifest)
+        ManifestGenerator(self.spec).write(manifest, image=image)
 
     def write_devcontainer(
         self,
@@ -84,12 +87,16 @@ class LocalBuilder:
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(DevcontainerGenerator(self.spec).render_json())
 
-    def prepare(self) -> None:
-        """Write generated files configured by the tutorial spec."""
+    def prepare(self, image: str | None = None) -> None:
+        """Write generated files configured by the tutorial spec.
+
+        Args:
+            image: Optional image tag override for the manifest.
+        """
 
         self.write_dockerfile()
         if self.spec.build.export_manifest:
-            self.write_manifest()
+            self.write_manifest(image=image)
         if self.spec.build.export_devcontainer:
             self.write_devcontainer()
 
@@ -98,6 +105,8 @@ class LocalBuilder:
         image: str | None = None,
         no_cache: bool | None = None,
         platform: str | None = None,
+        backend: ContainerBackend | str | None = None,
+        log_callback: LogCallback | None = None,
     ) -> BuildResult:
         """Prepare artifacts and run Docker build.
 
@@ -106,12 +115,27 @@ class LocalBuilder:
             no_cache: If ``True``, disable Docker layer
                 caching.
             platform: Target platform.
+            backend: Container backend instance or name.  A name
+                takes precedence over ``TUTORIAL_SDK_BACKEND`` and
+                ``build.backend``.
+            log_callback: Optional sink receiving each build output
+                line as it is produced.
 
         Returns:
             A ``BuildResult`` from Docker.
+
+        Raises:
+            BuildError: If the build fails or no container
+                backend is available.
+            ConfigError: If the selected backend name is
+                unknown.
         """
 
-        self.prepare()
-        return DockerBuilder(self.spec, self.root).build(
-            image=image, no_cache=no_cache, platform=platform
+        self.prepare(image=image)
+        # Forwarded only when given, keeping the historical call shape.
+        options = (
+            {"log_callback": log_callback} if log_callback is not None else {}
+        )
+        return DockerBuilder(self.spec, self.root, backend=backend).build(
+            image=image, no_cache=no_cache, platform=platform, **options
         )
