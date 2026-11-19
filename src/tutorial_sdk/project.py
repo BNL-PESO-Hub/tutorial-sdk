@@ -50,6 +50,10 @@ class TutorialProject:
         Returns:
             A ``TutorialProject`` rooted in the config
             file's parent directory.
+
+        Raises:
+            ConfigError: If the specification file cannot
+                be read or validated.
         """
 
         config_path = Path(path)
@@ -61,22 +65,36 @@ class TutorialProject:
         )
 
     @classmethod
-    def init(cls, path: str | Path = ".") -> "TutorialProject":
-        """Create a minimal tutorial project skeleton.
+    def init(
+        cls,
+        path: str | Path = ".",
+        template: str = "minimal",
+        name: str | None = None,
+    ) -> "TutorialProject":
+        """Create a starter tutorial project from a built-in template.
 
         Args:
             path: Target directory for the new project.
+            template: Built-in template name (``minimal``,
+                ``notebook-tutorial``, ``workshop``,
+                ``lab-exercise``, or ``demo``).
+            name: Optional project name override.  Defaults
+                to the target directory basename.
 
         Returns:
-            A ``TutorialProject`` with a ``minimal``
+            A ``TutorialProject`` with the selected
             template applied.
+
+        Raises:
+            ScaffoldError: If *template* is not recognised.
         """
 
         from .scaffold import ProjectScaffolder
 
         return ProjectScaffolder().scaffold(
-            "minimal",
+            template,
             Path(path),
+            name=name,
         )
 
     @classmethod
@@ -194,6 +212,12 @@ class TutorialProject:
 
         Returns:
             Combined ``ValidationReport``.
+
+        Raises:
+            ValidationError: If container validation cannot
+                complete.
+            ConfigError: If the selected backend name is
+                unknown.
         """
 
         reports = [
@@ -248,13 +272,20 @@ class TutorialProject:
                 takes precedence over ``TUTORIAL_SDK_BACKEND`` and
                 ``build.backend``.
             log_callback: Optional sink receiving each build output
-                line as it is produced; see
-                :meth:`DockerBuilder.build
-                <tutorial_sdk.builder.docker.DockerBuilder.build>`.
+                line as it is produced.  Without it the build is
+                silent and a failure's ``BuildError`` message carries
+                the build output; with it the output has already been
+                shown and the message is short.
 
         Returns:
             A ``BuildResult`` with the image tag and
             Dockerfile path.
+
+        Raises:
+            BuildError: If the build fails or no container
+                backend is available.
+            ConfigError: If the selected backend name is
+                unknown.
         """
 
         # Forwarded only when given, keeping the historical call shape.
@@ -293,6 +324,12 @@ class TutorialProject:
         Returns:
             A ``RunResult`` with the container exit
             code.
+
+        Raises:
+            BackendUnavailableError: If no container backend
+                is available.
+            ConfigError: If the selected backend name is
+                unknown.
         """
 
         return RuntimeLauncher(

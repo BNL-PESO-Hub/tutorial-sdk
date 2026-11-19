@@ -7,6 +7,8 @@ imports docker-py except ``backend/docker_sdk.py``.
 
 import ast
 from pathlib import Path
+import subprocess
+import sys
 
 import tutorial_sdk
 
@@ -52,3 +54,19 @@ def test_docker_py_only_in_sdk_backend():
             if any(n == "docker" or n.startswith("docker.") for n in names):
                 offenders.append(f"{path.relative_to(PACKAGE)}:{node.lineno}")
     assert offenders == []
+
+
+def test_top_level_import_does_not_load_docker():
+    code = (
+        "import sys; "
+        "sys.modules['docker'] = None; "
+        "import tutorial_sdk; "
+        "assert 'tutorial_sdk.backend.docker_sdk' not in sys.modules"
+    )
+    result = subprocess.run(
+        [sys.executable, "-c", code],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr

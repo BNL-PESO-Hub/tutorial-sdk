@@ -1,9 +1,11 @@
-"""The reference pages stay in step with the CLI parser and the spec models.
+"""The reference pages stay in step with the CLI parser, spec models, and API.
 
 ``docs/cli.md`` must list every subcommand option in the usage block and
 in an option bullet, with its choices and default (and nothing the
-parser does not accept), and ``docs/config-schema.md`` must list every
-field of the specification models with its default.
+parser does not accept), ``docs/config-schema.md`` must list every
+field of the specification models with its default, and
+``docs/api-public.md`` must document every symbol in
+``tutorial_sdk.__all__``.
 """
 
 import argparse
@@ -11,13 +13,16 @@ import re
 from pathlib import Path
 
 import pytest
+import yaml
 from pydantic import BaseModel
 from pydantic_core import PydanticUndefined
 
+import tutorial_sdk
 from tutorial_sdk import spec
 from tutorial_sdk.cli import _build_parser
 
-DOCS = Path(__file__).resolve().parents[1] / "docs"
+ROOT = Path(__file__).resolve().parents[1]
+DOCS = ROOT / "docs"
 
 pytestmark = pytest.mark.skipif(
     not DOCS.is_dir(), reason="documentation sources not available"
@@ -188,4 +193,38 @@ def test_schema_page_matches_models(title):
             continue
         assert _documented_default(rows[name]) == expected, (
             f"`{title}.{name}` default"
+        )
+
+
+def test_public_api_page_matches_exports():
+    text = (DOCS / "api-public.md").read_text()
+    directives = re.findall(r"^::: tutorial_sdk\.(\w+)\s*$", text, re.M)
+    assert directives, "docs/api-public.md has no symbol directives"
+    assert directives[0] == "TutorialProject"
+    assert len(directives) == len(set(directives)), (
+        "duplicate symbol directives in docs/api-public.md"
+    )
+    assert set(directives) == set(tutorial_sdk.__all__)
+    for symbol in tutorial_sdk.__all__:
+        assert hasattr(tutorial_sdk, symbol), f"missing export {symbol}"
+
+
+def test_mkdocs_references_navigation():
+    config = yaml.load(
+        (ROOT / "mkdocs.yml").read_text(), Loader=yaml.BaseLoader
+    )
+    nav_entries = {
+        key: value for item in config["nav"] for key, value in item.items()
+    }
+    assert "Python API Reference" not in nav_entries
+    assert "CLI Reference" not in nav_entries
+    assert nav_entries.get("References") == [
+        {"CLI Reference": "cli.md"},
+        {"Python API Reference": "api-public.md"},
+        {"API Usage Example": "api-example.md"},
+    ]
+    assert not (DOCS / "api-package.md").exists()
+    for page in DOCS.glob("*.md"):
+        assert "api-package.md" not in page.read_text(), (
+            f"{page.name} still references api-package.md"
         )
