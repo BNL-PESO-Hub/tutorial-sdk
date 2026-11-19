@@ -6,6 +6,7 @@ dist/
 __pycache__/
 *.py[codz]
 *$py.class
+.coverage
 .pytest_cache/
 .ruff_cache/
 hypothesis/
