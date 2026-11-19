@@ -21,9 +21,10 @@ Tutorial environments tend to drift over time: Dockerfiles diverge from notebook
 
 ## Key Features
 
-* **Declarative Configuration (`tutorial.yml`)**: Declare the whole tutorial surface - metadata, contents, package environments, and validation rules - in a single, Pydantic-validated YAML file.
-* **Deterministic Environment Synthesis**: Generates cache-friendly, reproducible Dockerfiles matching the exact dependency graph specified in your config.
+* **Declarative Configuration (`tutorial.yml`)**: Declare tutorial metadata, contents, package environments, and validation rules in a single, Pydantic-validated YAML file.
+* **Deterministic Environment Synthesis**: Generates cache-friendly, reproducible Dockerfiles from the dependencies and settings specified in your config.
 * **Notebook-Aware Container Validation**: Runs comprehensive local checks (assets, dependencies, notebook error detection) as well as full container validation (verifying built containers start successfully and that JupyterLab runs flawlessly inside).
+* **Pluggable Container Backends**: Runs container builds, validation, and local execution through either the Docker CLI or the Python Docker SDK (`tutorial-sdk[docker]`), with built-in environment diagnostics.
 * **GitHub Actions Integration**: Built-in support for standard, thin CI workflows (`tutorial-sdk ci`) that validate, build, test, and publish images from pull requests and releases.
 * **Extensible Scaffolding Templates**: Starter templates to quickly spin up beginner workshops, notebooks, course modules, or custom lab exercises.
 

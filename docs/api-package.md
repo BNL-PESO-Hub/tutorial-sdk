@@ -1,4 +1,4 @@
-# Available Modules
+# Full SDK API Reference
 
 ## Orchestration
 
@@ -40,6 +40,50 @@
 ::: tutorial_sdk.builder.local.LocalBuilder
 ::: tutorial_sdk.runtime.launcher.RunResult
 ::: tutorial_sdk.runtime.launcher.RuntimeLauncher
+
+## Container Backend Selection
+
+::: tutorial_sdk.backend.get_backend
+::: tutorial_sdk.backend.preference_source
+::: tutorial_sdk.backend.BACKEND_CHOICES
+::: tutorial_sdk.backend.BackendName
+
+## Container Backend Protocol
+
+::: tutorial_sdk.backend.base.ContainerBackend
+::: tutorial_sdk.backend.base.LogCallback
+::: tutorial_sdk.backend.base.ImageBuildResult
+::: tutorial_sdk.backend.base.ImagePushResult
+::: tutorial_sdk.backend.base.ContainerHandle
+::: tutorial_sdk.backend.base.ExecResult
+::: tutorial_sdk.backend.base.RunExit
+::: tutorial_sdk.backend.base.BackendInfo
+::: tutorial_sdk.backend.base.ManagedContainer
+::: tutorial_sdk.backend.base.MANAGED_LABEL
+::: tutorial_sdk.backend.base.MANAGED_LABEL_VALUE
+::: tutorial_sdk.backend.base.STOP_GRACE
+::: tutorial_sdk.backend.base.STOP_HINT
+::: tutorial_sdk.backend.base.observe_running
+::: tutorial_sdk.backend.base.trap_signals
+
+## Container Backend Implementations
+
+::: tutorial_sdk.backend.docker_cli.DockerCliBackend
+::: tutorial_sdk.backend.docker_cli.foreground_command
+::: tutorial_sdk.backend.docker_cli.tracked_command
+::: tutorial_sdk.backend.docker_sdk.DockerSdkBackend
+::: tutorial_sdk.backend.docker_sdk.requires_buildkit
+
+## Container Backend Errors
+
+::: tutorial_sdk.backend.errors
+
+## Diagnostics
+
+::: tutorial_sdk.doctor.diagnose
+::: tutorial_sdk.doctor.DoctorReport
+::: tutorial_sdk.doctor.BackendStatus
+::: tutorial_sdk.doctor.Selection
 
 ## Validation
 

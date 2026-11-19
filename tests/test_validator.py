@@ -1,6 +1,7 @@
 import json
 from unittest.mock import MagicMock, patch
 
+from tutorial_sdk.backend import DockerCliBackend
 from tutorial_sdk.spec import (
     TutorialSpec,
     ContentSpec,
@@ -113,24 +114,23 @@ def test_notebook_validator(tmp_path):
 
 
 @patch("subprocess.run")
-@patch("time.sleep")
-def test_container_validator_success(mock_sleep, mock_run):
+@patch.object(DockerCliBackend, "wait_running", return_value=True)
+def test_container_validator_success(mock_wait, mock_run):
     spec = TutorialSpec(name="my-app")
-    validator = ContainerValidator(spec)
+    validator = ContainerValidator(spec, backend=DockerCliBackend())
 
-    # 1. rm -f (cleanup) -> returncode 0
+    # 1. rm -f (stale pre-clean) -> returncode 0
     # 2. run -d -> returncode 0, stdout container_id
-    # 3. inspect State.Running -> returncode 0, stdout "true"
-    # 4. exec jupyter lab --version -> returncode 0, stdout "4.0.0"
-    # 5. rm -f (cleanup final) -> returncode 0
+    # (wait_running is stubbed; polling is covered elsewhere)
+    # 3. exec jupyter lab --version -> returncode 0, stdout "4.0.0"
+    # 4. rm -f (cleanup final) -> returncode 0
 
     r1 = MagicMock(returncode=0, stdout="")
     r2 = MagicMock(returncode=0, stdout="container123\n", stderr="")
-    r3 = MagicMock(returncode=0, stdout="true\n", stderr="")
-    r4 = MagicMock(returncode=0, stdout="4.0.0\n", stderr="")
-    r5 = MagicMock(returncode=0, stdout="")
+    r3 = MagicMock(returncode=0, stdout="4.0.0\n", stderr="")
+    r4 = MagicMock(returncode=0, stdout="")
 
-    mock_run.side_effect = [r1, r2, r3, r4, r5]
+    mock_run.side_effect = [r1, r2, r3, r4]
 
     report = validator.validate()
     assert report.passed
@@ -142,10 +142,9 @@ def test_container_validator_success(mock_sleep, mock_run):
 
 
 @patch("subprocess.run")
-@patch("time.sleep")
-def test_container_validator_fail_start(mock_sleep, mock_run):
+def test_container_validator_fail_start(mock_run):
     spec = TutorialSpec(name="my-app")
-    validator = ContainerValidator(spec)
+    validator = ContainerValidator(spec, backend=DockerCliBackend())
 
     # 1. rm -f (cleanup) -> returncode 0
     # 2. run -d -> returncode 1, stderr "docker daemon not running"

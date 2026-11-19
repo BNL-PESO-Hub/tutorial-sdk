@@ -1,0 +1,127 @@
+name: Tests
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -e ".[dev]"
+
+      - name: Ruff check
+        run: ruff check src tests
+
+      - name: Ruff format
+        run: ruff format --check src tests
+
+  docs:
+    name: Docs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0  # setuptools-scm derives the version from tags
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: Install
+        run: pip install -e ".[docs]"
+
+      - name: Build the documentation (warnings fail the build)
+        run: mkdocs build --strict
+
+  unit:
+    name: Unit (Python ${{ matrix.python }}, ${{ matrix.install }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.10", "3.11", "3.12", "3.13"]
+        install: ["base", "docker"]
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0  # setuptools-scm derives the version from tags
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: ${{ matrix.python }}
+
+      - name: Install (base)
+        if: matrix.install == 'base'
+        run: |
+          pip install -e ".[dev]"
+          python -c "import importlib.util, sys; sys.exit(importlib.util.find_spec('docker') is not None)"
+
+      - name: Install (with the docker extra)
+        if: matrix.install == 'docker'
+        run: pip install -e ".[dev,docker]"
+
+      - name: Unit tests (no Docker daemon needed)
+        run: pytest
+
+  contract:
+    name: Contract (both backends, live daemon)
+    runs-on: ubuntu-latest
+    services:
+      # Push cases push to this registry instead of starting their own.
+      registry:
+        image: registry:2
+        ports:
+          - 5000:5000
+    env:
+      TUTORIAL_SDK_CONTRACT_REGISTRY: localhost:5000
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: Install
+        run: pip install -e ".[dev,docker]"
+
+      - name: Prepare Docker
+        run: |
+          docker version
+          docker pull busybox:1.36
+
+      - name: Environment report
+        run: tutorial-sdk doctor
+
+      - name: Contract tests
+        run: pytest -m docker -v
+
+      - name: No tutorial-sdk containers left behind
+        if: always()
+        run: |
+          docker ps -a
+          leftovers="$(docker ps -aq --filter label=org.bnl-peso-hub.tutorial-sdk.managed=true)"
+          if [ -n "$leftovers" ]; then
+            echo "::error::containers left behind: $leftovers"
+            exit 1
+          fi

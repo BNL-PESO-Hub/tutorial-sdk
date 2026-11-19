@@ -63,6 +63,7 @@ build:
   export_devcontainer: true
   export_manifest: true
   cache: true
+  backend: auto   # auto | docker-cli | docker-sdk; omit for auto
   custom_sections:
     before_dependencies: docker/before-deps.Dockerfile
     after_dependencies: docker/after-deps.Dockerfile
@@ -149,13 +150,14 @@ Configures build generation behaviors, targets, and caching.
 | `preexecute_notebooks`| `bool` | `False` | Performs build-time notebook pre-execution. *Note: Future feature (not currently in use).* |
 | `export_devcontainer` | `bool` | `False` | Generates a corresponding `.devcontainer/devcontainer.json` configuration. |
 | `export_manifest` | `bool` | `True` | Automatically outputs `tutorial-manifest.json` on build execution. |
-| `cache` | `bool` | `True` | Directs the builder to utilize standard Docker layer caching. |
-| `custom_sections` | `DockerfileSections` | `n/a (empty)` | Relates custom Dockerfile snippet files: `before_dependencies`, `after_dependencies`, `before_entrypoint`. |
+| `cache` | `bool` | `True` | Directs the builder to utilize standard Docker layer caching. Used by `build`; `ci` caches unless `--no-cache` is given, whatever this field says. |
+| `backend` | `str` | `None` (unset) | Container backend used by `build`, `validate --container`, `run`, and `ci`: `"auto"`, `"docker-cli"`, or `"docker-sdk"`. Unset means `auto` and is left out of files written by `init` and `add`. The `--backend` option and the `TUTORIAL_SDK_BACKEND` environment variable take precedence. Any other value is a configuration error when the file is loaded. `tutorial-sdk` versions without container backends reject the field, so set it only when needed. See [Choosing a Container Backend](cli.md#choosing-a-container-backend). |
+| `custom_sections` | `DockerfileSections` | `n/a (empty)` | References custom Dockerfile snippet files: `before_dependencies`, `after_dependencies`, `before_entrypoint`. |
 
 ---
 
 ### 6. `validation`
-Enables individual testing metrics.
+Controls local and container-based validation checks.
 
 | Field | Type | Default | Description |
 | :--- | :---: | :---: | :--- |

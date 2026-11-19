@@ -6,6 +6,7 @@ from typing import Any, Literal
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from .backend import BackendName
 from .errors import ConfigError
 
 _PYTHON_VERSION_STR: str = "3.11"
@@ -79,7 +80,13 @@ class DockerfileSections(BaseModel):
 
 
 class BuildSpec(BaseModel):
-    """Build artifact and container image configuration."""
+    """Build artifact and container image configuration.
+
+    ``backend`` selects the container backend used by ``build``,
+    ``validate --container``, ``run``, and ``ci`` when neither the
+    ``--backend`` flag nor ``TUTORIAL_SDK_BACKEND`` names one.  Unset
+    (the default) means ``auto``; it is left out of written files.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
@@ -91,6 +98,7 @@ class BuildSpec(BaseModel):
     export_devcontainer: bool = False
     export_manifest: bool = True
     cache: bool = True
+    backend: BackendName | None = None
     custom_sections: DockerfileSections = Field(
         default_factory=DockerfileSections
     )

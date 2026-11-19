@@ -1,4 +1,4 @@
-# Common Workflow
+# Usage Example
 
 ```python
 from tutorial_sdk import TutorialProject

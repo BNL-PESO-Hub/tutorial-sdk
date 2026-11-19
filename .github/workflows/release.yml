@@ -49,7 +49,7 @@ jobs:
     if: ${{ inputs.publish }}
     permissions:
       id-token: write
-      attestations: write
+      contents: read
     uses: ./.github/workflows/publish.yml
     with:
       ref: "v${{ inputs.version }}"
