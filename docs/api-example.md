@@ -1,7 +1,7 @@
-# Usage Example
+# API Usage Example
 
 ```python
-from tutorial_sdk import TutorialProject
+from tutorial_sdk import LocalBuilder, TutorialProject
 
 project = TutorialProject.load("tutorial.yml")
 
@@ -13,8 +13,6 @@ if not report.passed:
 build_result = project.build(image="my-org/my-tutorial:v1.0")
 # build includes generating artifacts first,
 # which you can run manually as following to debug or customize:
-#
-#   from tutorial_sdk.builder import LocalBuilder
 #
 #   builder = LocalBuilder(project.spec, project.root)
 #   builder.write_dockerfile()

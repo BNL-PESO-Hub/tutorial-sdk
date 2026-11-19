@@ -62,7 +62,7 @@ backward-compatible.
   `BuildResult.digest` with the image ID.
 - **CI test workflow and documentation suite**: `.github/workflows/tests.yml`
   (ruff lint/format, `mkdocs build --strict`, unit matrix across Python
-  3.10–3.13 × base/`[docker]`, and live-daemon contract suite `pytest -m docker`
+  3.10–3.14 × base/`[docker]`, and live-daemon contract suite `pytest -m docker`
   against both backends), `tests/test_docs_reference.py`, and new
   Troubleshooting and Development documentation pages alongside updated
   Architecture, CLI, Configuration Schema, and API reference pages.
@@ -98,6 +98,9 @@ backward-compatible.
   `DockerCliBackend` (enforced by `tests/test_backend_boundary.py`). Tests and
   integrations should pass a `ContainerBackend` via `backend=` rather than
   monkeypatching `subprocess` in higher-level modules.
+- **Default tutorial runtime Python version**: `runtime.python` and
+  `build.base_image` now default to `"3.12"` and `"python:3.12-slim"` (was
+  `"3.11"` / `"python:3.11-slim"`).
 
 ### Fixed
 

@@ -9,7 +9,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from .backend import BackendName
 from .errors import ConfigError
 
-_PYTHON_VERSION_STR: str = "3.11"
+_PYTHON_VERSION_STR: str = "3.12"
 
 
 class AuthorSpec(BaseModel):

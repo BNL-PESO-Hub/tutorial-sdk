@@ -18,7 +18,7 @@ def test_local_builder_prepare_writes_dockerfile(
     dockerfile = tmp_path / "Dockerfile"
     assert dockerfile.exists()
     content = dockerfile.read_text()
-    assert "FROM python:3.11-slim" in content
+    assert "FROM python:3.12-slim" in content
 
 
 @patch(

@@ -15,7 +15,7 @@ def test_spec_defaults():
     assert spec.name == "test-tutorial"
     assert spec.version == "0.1.0"
     assert spec.display_title == "test-tutorial"
-    assert spec.build.base_image == "python:3.11-slim"
+    assert spec.build.base_image == "python:3.12-slim"
     assert isinstance(spec.runtime, RuntimeSpec)
     assert isinstance(spec.dependencies, DependencySpec)
     assert isinstance(spec.content, ContentSpec)

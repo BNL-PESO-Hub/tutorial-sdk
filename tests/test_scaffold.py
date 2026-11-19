@@ -1,3 +1,6 @@
+import pytest
+
+from tutorial_sdk import ScaffoldError, TutorialProject
 from tutorial_sdk.cli import main
 from tutorial_sdk.spec import TutorialSpec
 from tutorial_sdk.scaffold.templates import (
@@ -106,3 +109,25 @@ def test_scaffold_cli_integration(tmp_path):
     )
     assert code == 0
     assert (target / "tutorial.yml").exists()
+
+
+def test_project_init_default_and_templates(tmp_path):
+    minimal_dir = tmp_path / "default-init"
+    minimal_proj = TutorialProject.init(minimal_dir)
+    assert minimal_proj.spec.name == "default-init"
+    assert (minimal_dir / "tutorial.yml").exists()
+
+    workshop_dir = tmp_path / "custom-dir"
+    workshop_proj = TutorialProject.init(
+        workshop_dir,
+        template="workshop",
+        name="custom-workshop",
+    )
+    assert workshop_proj.spec.name == "custom-workshop"
+    assert len(workshop_proj.spec.content.notebooks) == 2
+    assert len(workshop_proj.spec.content.exercises) == 1
+
+
+def test_project_init_unknown_template(tmp_path):
+    with pytest.raises(ScaffoldError, match="Unknown template: invalid"):
+        TutorialProject.init(tmp_path / "bad", template="invalid")

@@ -97,10 +97,9 @@ nav:
   - Home: index.md
   - Architecture: architecture.md
   - Configuration Schema: config-schema.md
-  - CLI Reference: cli.md
-  - Python API Reference:
-      - Usage Example: api-example.md
-      - Public API: api-public.md
-      - Full SDK API: api-package.md
+  - References:
+      - CLI Reference: cli.md
+      - Python API Reference: api-public.md
+      - API Usage Example: api-example.md
   - Development: development.md
   - Troubleshooting: troubleshooting.md

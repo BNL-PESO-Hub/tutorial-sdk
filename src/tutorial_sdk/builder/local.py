@@ -109,13 +109,20 @@ class LocalBuilder:
             no_cache: If ``True``, disable Docker layer
                 caching.
             platform: Target platform.
-            backend: Container backend instance or name; see
-                :class:`DockerBuilder`.
-            log_callback: Optional sink for build output lines; see
-                :meth:`DockerBuilder.build`.
+            backend: Container backend instance or name.  A name
+                takes precedence over ``TUTORIAL_SDK_BACKEND`` and
+                ``build.backend``.
+            log_callback: Optional sink receiving each build output
+                line as it is produced.
 
         Returns:
             A ``BuildResult`` from Docker.
+
+        Raises:
+            BuildError: If the build fails or no container
+                backend is available.
+            ConfigError: If the selected backend name is
+                unknown.
         """
 
         self.prepare()
