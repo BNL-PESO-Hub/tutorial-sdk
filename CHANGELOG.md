@@ -66,6 +66,10 @@ backward-compatible.
   against both backends), `tests/test_docs_reference.py`, and new
   Troubleshooting and Development documentation pages alongside updated
   Architecture, CLI, Configuration Schema, and API reference pages.
+- **Spec-level image resolution helpers**: `TutorialSpec.effective_image` and
+  `TutorialSpec.resolve_image()`, plus `ResolutionResult.missing_relative_paths`
+  and optional `image=` override support on `LocalBuilder.prepare()` and
+  `LocalBuilder.write_manifest()`.
 
 ### Changed
 
@@ -101,6 +105,13 @@ backward-compatible.
 - **Default tutorial runtime Python version**: `runtime.python` and
   `build.base_image` now default to `"3.12"` and `"python:3.12-slim"` (was
   `"3.11"` / `"python:3.11-slim"`).
+- **Resolution result naming and consolidation**: renamed
+  `ResolvedTutorialProject` to `ResolutionResult` to match `BuildResult` and
+  `RunResult` (avoiding confusion with `TutorialProject`). `AssetValidator` now
+  delegates content path checking to `TutorialResolver`, and `DockerBuilder`,
+  `RuntimeLauncher`, `ContainerValidator`, `TutorialSpec.to_manifest_dict()`,
+  and `tutorial-sdk ci` share `TutorialSpec.resolve_image()` instead of
+  duplicating fallback logic or scanning content files during `ci` builds.
 
 ### Fixed
 
@@ -112,5 +123,10 @@ backward-compatible.
 - **`ci --mode` accepts only known modes**: `validate`, `build`, `test`,
   `publish`, or `all`. An unknown mode used to do nothing and exit `0`; it is
   now a command-line error (exit code `2`).
+- **Consistent `image` field in `tutorial-manifest.json`**:
+  `TutorialSpec.to_manifest_dict()` and `LocalBuilder.write_manifest()` now
+  record the effective or overridden image tag (defaulting to `<name>:latest`
+  when `build.image` is unset) instead of emitting `"image": null`, matching
+  `TutorialProject.inspect()` and `tutorial-sdk ci`.
 
 [0.2.0]: https://github.com/BNL-PESO-Hub/tutorial-sdk/compare/v0.1.2...v0.2.0

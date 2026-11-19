@@ -65,7 +65,7 @@ class RuntimeLauncher:
                 unknown.
         """
 
-        image = image or self.spec.build.image or f"{self.spec.name}:latest"
+        image = self.spec.resolve_image(image)
         backend = get_backend(
             self.backend, fallback_name=self.spec.build.backend
         )

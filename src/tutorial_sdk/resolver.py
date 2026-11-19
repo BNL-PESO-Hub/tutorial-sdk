@@ -8,8 +8,8 @@ from .spec import TutorialSpec
 
 
 @dataclass(frozen=True)
-class ResolvedTutorialProject:
-    """A specification with project-relative paths resolved."""
+class ResolutionResult:
+    """Result of resolving a tutorial specification against a project root."""
 
     spec: TutorialSpec
     root: Path
@@ -21,7 +21,18 @@ class ResolvedTutorialProject:
     def image(self) -> str:
         """Return the configured or default image tag."""
 
-        return self.spec.build.image or f"{self.spec.name}:latest"
+        return self.spec.effective_image
+
+    @property
+    def missing_relative_paths(self) -> tuple[str, ...]:
+        """Return missing content paths relative to ``root``."""
+
+        return tuple(
+            str(path.relative_to(self.root))
+            if path.is_relative_to(self.root)
+            else str(path)
+            for path in self.missing_paths
+        )
 
 
 class TutorialResolver:
@@ -41,7 +52,7 @@ class TutorialResolver:
     def resolve(
         self,
         config_path: str | Path = DEFAULT_CONFIG,
-    ) -> ResolvedTutorialProject:
+    ) -> ResolutionResult:
         """Resolve declared content files.
 
         Args:
@@ -49,7 +60,7 @@ class TutorialResolver:
                 associated with this project.
 
         Returns:
-            A ``ResolvedTutorialProject`` containing
+            A ``ResolutionResult`` containing
             absolute content paths and missing path details.
         """
 
@@ -59,7 +70,7 @@ class TutorialResolver:
         missing_paths = tuple(
             path for path in content_paths if not path.exists()
         )
-        return ResolvedTutorialProject(
+        return ResolutionResult(
             spec=self.spec,
             root=self.root,
             config_path=Path(config_path),

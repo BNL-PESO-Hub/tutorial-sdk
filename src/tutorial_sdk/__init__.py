@@ -12,7 +12,7 @@ from .errors import (
     ValidationError,
 )
 from .project import TutorialProject
-from .resolver import ResolvedTutorialProject
+from .resolver import ResolutionResult
 from .runtime import RunResult
 from .spec import (
     AuthorSpec,
@@ -42,7 +42,7 @@ __all__ = [
     "DoctorReport",
     "EntrypointSpec",
     "LocalBuilder",
-    "ResolvedTutorialProject",
+    "ResolutionResult",
     "RunResult",
     "RuntimeSpec",
     "ScaffoldError",

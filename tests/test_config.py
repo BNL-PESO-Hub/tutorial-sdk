@@ -64,6 +64,23 @@ def test_to_manifest_dict():
     assert "dependencies" in manifest
 
 
+def test_effective_and_resolve_image():
+    default_spec = TutorialSpec(name="demo")
+    assert default_spec.effective_image == "demo:latest"
+    assert default_spec.resolve_image() == "demo:latest"
+    assert default_spec.resolve_image("custom:v2") == "custom:v2"
+    assert default_spec.to_manifest_dict()["image"] == "demo:latest"
+
+    configured_spec = TutorialSpec(
+        name="demo",
+        build=BuildSpec(image="ghcr.io/org/demo:1.0"),
+    )
+    assert configured_spec.effective_image == "ghcr.io/org/demo:1.0"
+    assert configured_spec.resolve_image() == "ghcr.io/org/demo:1.0"
+    assert configured_spec.resolve_image("override:2.0") == "override:2.0"
+    assert configured_spec.to_manifest_dict()["image"] == "ghcr.io/org/demo:1.0"
+
+
 # ---------------------------------------------------------------------------
 # build.backend
 # ---------------------------------------------------------------------------

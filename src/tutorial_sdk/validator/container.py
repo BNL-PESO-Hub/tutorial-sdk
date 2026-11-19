@@ -46,7 +46,7 @@ class ContainerValidator:
 
         Args:
             image: Override image tag.  Falls back to
-                the build spec's configured image.
+                :attr:`TutorialSpec.effective_image`.
 
         Returns:
             A ``ValidationReport`` with container
@@ -59,9 +59,7 @@ class ContainerValidator:
                 unknown.
         """
 
-        image_name = (
-            image or self.spec.build.image or f"{self.spec.name}:latest"
-        )
+        image_name = self.spec.resolve_image(image)
         container_name = f"tutorial-sdk-val-{self.spec.name}"
 
         try:

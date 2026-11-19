@@ -1,7 +1,7 @@
 from tutorial_sdk.spec import TutorialSpec, ContentSpec
 from tutorial_sdk.resolver import (
     TutorialResolver,
-    ResolvedTutorialProject,
+    ResolutionResult,
 )
 
 
@@ -22,7 +22,7 @@ def test_resolver_all_present(tmp_path):
     resolver = TutorialResolver(spec, tmp_path)
     result = resolver.resolve()
 
-    assert isinstance(result, ResolvedTutorialProject)
+    assert isinstance(result, ResolutionResult)
     assert len(result.missing_paths) == 0
     assert len(result.content_paths) == 2
 
@@ -39,6 +39,18 @@ def test_resolver_missing_files(tmp_path):
 
     assert len(result.missing_paths) == 1
     assert "missing.ipynb" in str(result.missing_paths[0])
+    assert result.missing_relative_paths == ("notebooks/missing.ipynb",)
+
+
+def test_resolver_missing_non_subpath(tmp_path):
+    spec = TutorialSpec(
+        name="abs-miss-test",
+        content=ContentSpec(
+            notebooks=["/nonexistent/abs_missing.ipynb"],
+        ),
+    )
+    result = TutorialResolver(spec, tmp_path).resolve()
+    assert result.missing_relative_paths == ("/nonexistent/abs_missing.ipynb",)
 
 
 def test_resolver_image_default():
